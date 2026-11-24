@@ -309,3 +309,108 @@ it("内层 effect 抛错释放自己时不会影响外层 effect 继续追踪", 
   setOuter(1);
   expect(outerSeen).toEqual([0, 1]);
 });
+
+it.skip("外层 effect 重跑前会清理上一轮创建的内层 effect", () => {
+  const [outer, setOuter] = createSignal(0);
+  const [inner, setInner] = createSignal(0);
+  const logs: string[] = [];
+
+  createEffect(() => {
+    const step = outer();
+    createEffect(() => {
+      logs.push(`${step}:${inner()}`);
+    });
+  });
+
+  expect(logs).toEqual(["0:0"]);
+
+  // 外层重跑两次后，旧两轮创建的内层 effect 必须已经释放，改 inner 只会唤醒最新一轮。
+  setOuter(1);
+  setOuter(2);
+  logs.length = 0;
+
+  setInner(1);
+  expect(logs).toEqual(["2:1"]);
+});
+
+it.skip("释放外层 effect 时会递归释放多层嵌套的后代 effect", () => {
+  const [outer, setOuter] = createSignal(0);
+  const [middle, setMiddle] = createSignal(0);
+  const [inner, setInner] = createSignal(0);
+  let outerRuns = 0;
+  let middleRuns = 0;
+  let innerRuns = 0;
+
+  const disposeOuter = createEffect(() => {
+    outer();
+    outerRuns += 1;
+    createEffect(() => {
+      middle();
+      middleRuns += 1;
+      createEffect(() => {
+        inner();
+        innerRuns += 1;
+      });
+    });
+  });
+
+  expect([outerRuns, middleRuns, innerRuns]).toEqual([1, 1, 1]);
+
+  // 释放最外层后，三层节点应全部退订，改任意一层的 signal 都不会再触发执行。
+  disposeOuter();
+  setOuter(1);
+  setMiddle(1);
+  setInner(1);
+  expect([outerRuns, middleRuns, innerRuns]).toEqual([1, 1, 1]);
+});
+
+it.skip("内层 effect 抛错被接住后仍会恢复外层所有权上下文", () => {
+  const [outer, setOuter] = createSignal(0);
+  const [inner, setInner] = createSignal(0);
+  const seen: string[] = [];
+
+  const disposeOuter = createEffect(() => {
+    const step = outer();
+    try {
+      createEffect(() => {
+        throw new Error("inner boom");
+      });
+    } catch {
+      // 外层接住异常后继续创建另一个内层 effect，它仍应归属于外层。
+    }
+    createEffect(() => {
+      seen.push(`${step}:${inner()}`);
+    });
+  });
+
+  expect(seen).toEqual(["0:0"]);
+
+  setOuter(1);
+  seen.length = 0;
+  setInner(1);
+  expect(seen).toEqual(["1:1"]);
+
+  disposeOuter();
+  setInner(2);
+  expect(seen).toEqual(["1:1"]);
+});
+
+it.skip("外层 effect 创建内层 effect 后中途抛错时也会清理已创建的内层 effect", () => {
+  const [inner, setInner] = createSignal(0);
+  let innerRuns = 0;
+
+  expect(() => {
+    createEffect(() => {
+      createEffect(() => {
+        inner();
+        innerRuns += 1;
+      });
+      throw new Error("outer boom");
+    });
+  }).toThrow("outer boom");
+
+  expect(innerRuns).toBe(1);
+  // 外层在 catch 中释放自己时，已挂入 children 的内层 effect 也必须一并清理。
+  setInner(1);
+  expect(innerRuns).toBe(1);
+});

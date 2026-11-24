@@ -1,20 +1,33 @@
 /** 会随读取过的 signal 变化而重新执行的副作用函数。 */
 export type EffectCallback = () => void;
 
-/** 用于停止一个 effect 订阅并释放依赖的清理函数。 */
+/** 用于停止一个作用域或 effect 订阅并释放依赖的清理函数。 */
 export type Dispose = () => void;
 
 /**
- * 内部维护的 effect 节点：保存用户回调、反向依赖集合，以及是否已经释放的状态。
+ * 内部维护的所有权节点：记录所属父节点、下属子作用域集合、释放状态以及自身收尾钩子。
  */
-type Effect = {
+type Owner = {
+  parent: Owner | undefined;
+  children: Set<Owner>;
+  disposed: boolean;
+  onDispose?: () => void;
+};
+
+/**
+ * 内部维护的 effect 节点：同时是一个 Owner，保存用户回调与反向依赖集合。
+ */
+type Effect = Owner & {
   callback: EffectCallback;
   dependencies: Set<Set<Effect>>;
-  disposed: boolean;
 };
 
 /** 记录当前同步执行中的 effect，getter 靠它知道这次读取该登记给谁。 */
 let currentEffect: Effect | undefined;
+
+/** 记录当前活跃的所有权作用域，新创建的子 effect 会自动归属于它。 */
+// oxlint-disable-next-line no-unassigned-vars -- 完成 TODO 后删除这行
+let currentOwner: Owner | undefined;
 
 /**
  * 把 effect 从它上一轮订阅过的所有 signal 中移除，并清空自身依赖记录。
@@ -30,19 +43,33 @@ function cleanupDependencies(effect: Effect): void {
 }
 
 /**
- * 标记 effect 已释放并断开它持有的所有 signal 订阅，重复调用保持幂等。
+ * 按后进先出顺序释放当前所有权节点下属的全部子作用域，并清空 children 集合。
  *
- * @param effect 需要停止响应的 effect 节点。
+ * @param owner 即将重跑或待释放的所有权节点。
  */
-function disposeEffect(effect: Effect): void {
-  // 已经释放过时直接返回，否则标记 disposed 并清理全部双向订阅。
-  if (effect.disposed) return;
-  effect.disposed = true;
-  cleanupDependencies(effect);
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+function cleanupChildren(owner: Owner): void {
+  // 先复制快照并清空 owner.children，再按逆序逐个调用 disposeOwner 递归清理后代。
+  // TODO: 复制 Array.from(owner.children)、清空 owner.children，并逆序遍历调用 disposeOwner(child)。
 }
 
 /**
- * 在追踪上下文中执行 effect：跳过已释放节点，清理上一轮依赖，运行回调重建本轮订阅；若中途抛错则释放半截订阅，最后恢复外层记录。
+ * 标记所有权节点已释放，断开与父节点的关联，递归清理所有子作用域并执行自身收尾逻辑；重复调用保持幂等。
+ *
+ * @param owner 需要释放的所有权节点。
+ */
+function disposeOwner(owner: Owner): void {
+  // 已经释放过时直接返回，否则先标记 disposed 并从父节点摘除，避免父节点持有死引用。
+  if (owner.disposed) return;
+  owner.disposed = true;
+  owner.parent?.children.delete(owner);
+  owner.parent = undefined;
+  cleanupChildren(owner);
+  owner.onDispose?.();
+}
+
+/**
+ * 在追踪与所有权上下文中执行 effect：跳过已释放节点，清理上一轮依赖与子作用域，运行回调重建本轮订阅；若中途抛错则释放半截资源，最后恢复外层上下文。
  *
  * @param effect 本轮要执行的 effect 节点。
  */
@@ -50,33 +77,44 @@ function runEffect(effect: Effect): void {
   // 同一轮通知快照里，前面的 effect 可能已经释放了当前节点，进入前必须先跳过。
   if (effect.disposed) return;
   cleanupDependencies(effect);
-  // 保存外层 effect，并在 try/finally 中恢复；若回调抛错，则在 catch 中释放半截订阅后继续抛出。
-  const previous = currentEffect;
+  // 重跑前先清理上一轮执行期间创建的全部子作用域，避免嵌套 effect 随重跑不断堆叠。
+  // TODO: 调用 cleanupChildren(effect)。
+
+  // 保存外层追踪与所有权上下文，并在 try/finally 中恢复；若回调抛错，则在 catch 中释放半截订阅与子作用域后继续抛出。
+  const previousEffect = currentEffect;
+  // TODO: 保存 previousOwner = currentOwner，并将 currentOwner 设为 effect（在 finally 中恢复）。
   currentEffect = effect;
   try {
     effect.callback();
   } catch (error) {
-    disposeEffect(effect);
+    disposeOwner(effect);
     throw error;
   } finally {
-    currentEffect = previous;
+    currentEffect = previousEffect;
   }
 }
 
 /**
- * 立即执行一次回调，让内部读取到的 signal 自动把回调登记为依赖，并返回停止订阅的释放函数。
+ * 立即执行一次回调，让内部读取到的 signal 自动把回调登记为依赖，并将当前 effect 归入活跃的 Owner，返回停止订阅的释放函数。
  *
  * @param callback 读取 signal 并执行副作用的回调函数。
- * @returns 调用后即可退订并停止该 effect 的释放函数。
+ * @returns 调用后即可退订并释放该 effect 及其后代的释放函数。
  */
 export function createEffect(callback: EffectCallback): Dispose {
   const effect: Effect = {
+    parent: currentOwner,
+    children: new Set(),
+    disposed: false,
     callback,
     dependencies: new Set(),
-    disposed: false,
   };
+  effect.onDispose = () => cleanupDependencies(effect);
+
+  // 若存在未释放的父作用域，把当前 effect 挂入其 children，便于父作用域重跑或销毁时统一回收。
+  // TODO: 若 currentOwner && !currentOwner.disposed，将 effect 加入 currentOwner.children。
+
   runEffect(effect);
-  return () => disposeEffect(effect);
+  return () => disposeOwner(effect);
 }
 
 /**
