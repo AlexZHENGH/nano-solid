@@ -17,10 +17,12 @@ let currentEffect: Effect | undefined;
  *
  * @param effect 即将重跑的 effect 节点。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function cleanupDependencies(effect: Effect): void {
   // 逐个通知上一轮读过的 signal 删掉当前 effect，再清空反向集合，避免旧分支残留订阅。
-  // TODO: 遍历 effect.dependencies，把 effect 从每个 subscribers 中删除，然后清空 effect.dependencies。
+  for (const subscribers of effect.dependencies) {
+    subscribers.delete(effect);
+  }
+  effect.dependencies.clear();
 }
 
 /**
@@ -74,7 +76,7 @@ export function createSignal<T>(initialValue: T) {
     if (currentEffect) {
       subscribers.add(currentEffect);
       // 反向记录当前 signal 的 subscribers 集合，方便下次重跑前精准清理旧依赖。
-      // TODO: 把 subscribers 加入 currentEffect.dependencies。
+      currentEffect.dependencies.add(subscribers);
     }
     return value;
   }

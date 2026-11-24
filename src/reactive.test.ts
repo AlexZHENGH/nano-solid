@@ -144,7 +144,7 @@ it("写入 -0 替换 +0 时会视为新值", () => {
   expect(runs).toBe(2);
 });
 
-it.skip("切换分支后不再响应旧分支的写入", () => {
+it("切换分支后不再响应旧分支的写入", () => {
   const [isLeft, setIsLeft] = createSignal(true);
   const [left, setLeft] = createSignal(0);
   const [right, setRight] = createSignal(10);
@@ -162,7 +162,7 @@ it.skip("切换分支后不再响应旧分支的写入", () => {
   expect(seen).toEqual([0, 10, 11]);
 });
 
-it.skip("切回原分支后会重新追踪原分支并放弃另一侧", () => {
+it("切回原分支后会重新追踪原分支并放弃另一侧", () => {
   const [isLeft, setIsLeft] = createSignal(true);
   const [left, setLeft] = createSignal(0);
   const [right, setRight] = createSignal(10);

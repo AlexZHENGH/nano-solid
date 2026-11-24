@@ -1,0 +1,36 @@
+核心改动只有两处，一处是读值时补齐反向登记，另一处是重跑前按反向记录退订。
+
+先在 `get()` 里把当前 signal 的 `subscribers` 集合记到 `currentEffect.dependencies` 上：
+
+```ts
+function get(): T {
+  // 只有在同步执行中的 effect 读值时，才把它和当前 signal 互相登记。
+  if (currentEffect) {
+    subscribers.add(currentEffect);
+    // 反向记录当前 signal 的 subscribers 集合，方便下次重跑前精准清理旧依赖。
+    currentEffect.dependencies.add(subscribers);
+  }
+  return value;
+}
+```
+
+再实现 `cleanupDependencies(effect)`，把 `effect` 从它上一轮订阅过的每一个 `subscribers` 集合里移除，最后清空 `effect.dependencies`：
+
+```ts
+function cleanupDependencies(effect: Effect): void {
+  // 逐个通知上一轮读过的 signal 删掉当前 effect，再清空反向集合，避免旧分支残留订阅。
+  for (const subscribers of effect.dependencies) {
+    subscribers.delete(effect);
+  }
+  effect.dependencies.clear();
+}
+```
+
+`runEffect(effect)` 会在调用 `effect.callback()` 之前先执行 `cleanupDependencies(effect)`。每当条件分支切换，上一轮读过的 `left` 会先被退订，接着本轮执行只会把实际读到的 `isLeft` 和 `right` 重新登记回来。由于 `set(next)` 遍历的是 `Array.from(subscribers)` 复制出的快照，重跑过程中对原 `subscribers` 的删减和重加也不会干扰本轮通知。
+
+保存后运行 `pnpm dev` 只会打印 `0`、`10`、`11`，运行 `pnpm format && pnpm check && pnpm test:run` 12 条测试全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 3.2-learn 3.2-solution -- src
+```
