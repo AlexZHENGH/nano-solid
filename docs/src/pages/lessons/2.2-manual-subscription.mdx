@@ -1,0 +1,50 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "2.2 写入时通知订阅者"
+description: "把关心状态变化的回调登记进 signal，让写入主动通知所有订阅者。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+import ReactivityConsoleDemo from "../../components/ReactivityConsoleDemo";
+
+上一节我们用闭包做出了最简版的 `createSignal`，调用 `setCount` 后，再用 `count()` 就能读到最新值。不过现在每次改完值，都得自己手动去读、手动去打印。这一节我们来补上通知机制，让 signal 在值变化时主动把消息推给关心它的回调。
+
+## 值变了，谁来喊别人更新？
+
+假设页面上有两处都在显示同一个计数。按上一节的写法，每次调用 `setCount` 后，你都得记得手动去更新这两处。以后多出第三处显示，写值的地方还得再改一遍。
+
+换个方向就省事多了：让关心 `count` 的地方主动把回调交给 signal，等 `setCount` 写入新值后，由 signal 统一通知它们。回调里继续调用 `count()` 拿到最新值：
+
+```ts
+const [count, setCount, subscribe] = createSignal(0);
+
+// 先把回调交给 signal，等后面写入时再执行。
+subscribe(() => console.log(count()));
+setCount(1);
+setCount(2);
+```
+
+每个 signal 都有自己独立的订阅集合。把 `const subscribers = new Set<() => void>()` 和 `value` 放进同一个闭包里，写入这个 signal 时就只会通知关心它的人。这里有两个顺序细节很关键：登记本身不应该立刻执行回调。写入时则必须先把新值赋给 `value`，再遍历通知回调，否则回调里调用 `count()` 读到的还是写入前的旧值。
+
+> [!NOTE]
+> 用 `Set` 存回调时，同一个函数引用登记两次只会留下一份。但如果在两处各写一个内容一模一样的箭头函数，它们在 JavaScript 里是两个不同的函数引用，集合里会各占一个位置。
+
+## 预期效果
+
+留意下面的 Console 一开始是空的，说明 `subscribe` 登记本身不会立刻执行回调。点一下 `调用 setCount(1)`，再点 `调用 setCount(2)`，代码里没有新增任何 `console.log`，Console 却依次多出了 `1` 和 `2`。
+
+<ReactivityConsoleDemo
+  mode="subscribe"
+  label="2.2 预期效果：手动订阅后在写入时收到通知"
+  client:load
+/>
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/2.2 2.2-learn
+> ```
+>
+> 起手运行 `pnpm dev` 不会有任何输出。补齐 `src/reactive.ts` 中的订阅集合、登记和写入通知，让 `pnpm dev` 依次打印 `1`、`2`，并保证 `pnpm format && pnpm check && pnpm test:run` 全部通过。
+
+<LessonSolution slug="2.2-manual-subscription" tag="2.2-solution" />

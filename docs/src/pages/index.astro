@@ -3,6 +3,7 @@ import BookLayout from "../layouts/BookLayout.astro";
 import { frontmatter as setup } from "./lessons/1-setup.mdx";
 import { frontmatter as reactivity } from "./lessons/2.0-reactivity.mdx";
 import { frontmatter as signal } from "./lessons/2.1-signal.mdx";
+import { frontmatter as manualSubscription } from "./lessons/2.2-manual-subscription.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -10,6 +11,7 @@ const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
 const setupUrl = `${baseUrl}/lessons/1-setup/`;
 const reactivityUrl = `${baseUrl}/lessons/2.0-reactivity/`;
 const signalUrl = `${baseUrl}/lessons/2.1-signal/`;
+const manualSubscriptionUrl = `${baseUrl}/lessons/2.2-manual-subscription/`;
 ---
 
 <BookLayout
@@ -54,5 +56,6 @@ const signalUrl = `${baseUrl}/lessons/2.1-signal/`;
   <h3 class="course-chapter"><a href={reactivityUrl}>{reactivity.title}</a></h3>
   <ul class="course-lessons">
     <li><a href={signalUrl}>{signal.title}</a></li>
+    <li><a href={manualSubscriptionUrl}>{manualSubscription.title}</a></li>
   </ul>
 </BookLayout>
