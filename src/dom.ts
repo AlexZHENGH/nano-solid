@@ -1,7 +1,7 @@
 import { createEffect, type Dispose } from "./reactive.ts";
 
 /** 可挂载到 DOM 且自带清理逻辑的渲染单元。 */
-export type Renderable<T extends Node> = {
+export type Renderable<T extends Node = Node> = {
   node: T;
   dispose: Dispose;
 };

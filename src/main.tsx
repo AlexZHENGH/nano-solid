@@ -1,4 +1,4 @@
-// 浏览器入口：演示基于 nano-solid 的计数器、卸载切换与外部状态写入观察。
+// 浏览器入口：已切换到 TSX，先用 JSX 改写占位提示和底部观察行。
 import {
   createElement,
   createReactiveText,
@@ -57,7 +57,6 @@ function createCounterView(
   const value = createRenderableElement("span", [
     createReactiveText(() => {
       const current = count();
-      // 记录本轮真实触发的响应式文本更新，供页面底部观察卸载后是否停止更新。
       onTextUpdate();
       return String(current);
     }),
@@ -79,15 +78,13 @@ function createCounterView(
 }
 
 /**
- * 组装卸载后显示在容器内的虚线占位提示视图。
+ * 组装卸载后显示在容器内的虚线占位提示视图（使用 JSX 创建段落元素）。
  *
  * @returns 展示“已卸载”说明的段落 Renderable。
  */
-function createEmptyView(): Renderable<HTMLParagraphElement> {
-  const empty = createRenderableElement("p", [
-    createStaticText("计数器已从容器移除，对应的订阅也已全部释放。"),
-  ]);
-  empty.node.className = "ns-empty";
+function createEmptyView(): Renderable {
+  const empty = <p>计数器已从容器移除，对应的订阅也已全部释放。</p>;
+  (empty.node as HTMLParagraphElement).className = "ns-empty";
   return empty;
 }
 
@@ -106,8 +103,8 @@ if (app) {
   };
 
   // 2. 顶部标题栏与挂载状态徽章：徽章文案和配色随 mounted 信号自动切换。
-  const title = createRenderableElement("h1", [createStaticText("nano-solid 计数器")]);
-  title.node.className = "ns-card-title";
+  const title = <h1>nano-solid 计数器</h1>;
+  (title.node as HTMLHeadingElement).className = "ns-card-title";
 
   const badge = createRenderableElement("span", [
     createReactiveText(() => (mounted() ? "已挂载" : "已卸载")),
@@ -122,8 +119,8 @@ if (app) {
   // 3. 计数器独立挂载宿主与分割线：卸载时只操作 host 内部，不影响外层卡片壳。
   const host = createElement("div");
 
-  const divider = createRenderableElement("hr");
-  divider.node.className = "ns-divider";
+  const divider = <hr />;
+  (divider.node as HTMLHRElement).className = "ns-divider";
 
   // 4. 底部控制栏：一个卸载/重新挂载切换按钮，加一个绕过计数器直接改状态的外部写入按钮。
   const toggleButton = createRenderableElement("button", [
@@ -131,7 +128,6 @@ if (app) {
   ]);
   toggleButton.node.type = "button";
   createEffect(() => {
-    // 处于已挂载状态时用危险描边提示卸载动作，已卸载状态恢复普通按钮样式。
     toggleButton.node.className = mounted() ? "ns-btn ns-btn-danger" : "ns-btn";
   });
 
@@ -145,14 +141,14 @@ if (app) {
   const controls = createRenderableElement("div", [toggleButton, externalWriteButton]);
   controls.node.className = "ns-actions";
 
-  // 5. 底部观察行：同时展示外部信号当前值与计数器文本节点的真实更新次数。
-  const meta = createRenderableElement("p", [
-    createStaticText("信号当前值："),
-    createRenderableElement("code", [createReactiveText(() => String(count()))]),
-    createStaticText("，响应式文本更新次数："),
-    createRenderableElement("code", [createReactiveText(() => String(textUpdates()))]),
-  ]);
-  meta.node.className = "ns-meta";
+  // 5. 底部观察行：改用 JSX 数组与函数子节点同时展示信号当前值和文本更新次数。
+  const meta = (
+    <p>
+      信号当前值：<code>{() => count()}</code>，响应式文本更新次数：
+      <code>{() => textUpdates()}</code>
+    </p>
+  );
+  (meta.node as HTMLParagraphElement).className = "ns-meta";
 
   // 6. 组装外层卡片并挂入 #app，再把初始计数器视图挂进独立宿主 host。
   const card = createRenderableElement("section", [

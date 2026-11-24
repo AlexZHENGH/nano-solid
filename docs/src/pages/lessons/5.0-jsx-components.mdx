@@ -37,7 +37,7 @@ display.node.className = "ns-counter-display";
 
 这一章分四小节把整套声明式写法搭起来：
 
-- **5.1 JSX 运行时与子节点归一化**：用 `package.json` 的包内 `#nano-solid` 映射接入 `react-jsx` 自动转换，把字符串、数字、嵌套数组和响应式函数子节点归一化为 `Renderable`。
+- **[5.1 JSX 运行时与子节点归一化](../5.1-jsx-runtime/)**：用 `package.json` 的包内 `#nano-solid` 映射接入 `react-jsx` 自动转换，把字符串、数字、嵌套数组和响应式函数子节点归一化为 `Renderable`。
 - **5.2 静态属性与事件绑定**：升级 `createRenderableElement(tag, props, children)`，支持静态 `id`、`type`、`class` 以及成对清理的 `onClick` 监听。
 - **5.3 响应式属性与构造失败回滚**：抽离 `bindProperty` 驱动动态 `class` 和按钮 `disabled`，并在构造中途抛错时自动回滚已建立的订阅、监听与子节点。
 - **5.4 函数组件**：让 `jsx` 支持函数组件并验证“组件函数只执行一次”，用 `<Counter />` 彻底重构 `src/main.tsx`。

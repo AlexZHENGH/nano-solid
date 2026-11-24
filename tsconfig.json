@@ -9,6 +9,10 @@
     "target": "esnext",
     "types": ["node"],
 
+    // 启用自动 JSX 转换，通过 package.json 的 #nano-solid 子路径映射指向 src/jsx-runtime.ts。
+    "jsx": "react-jsx",
+    "jsxImportSource": "#nano-solid",
+
     // 让 TypeScript 检查可能不存在的值，以及可选属性的赋值。
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -24,5 +28,5 @@
     "skipLibCheck": true
   },
   // 覆盖当前快照的源码、测试和仓库工具，供编辑器和 pnpm typecheck 检查。
-  "include": ["scripts/**/*.ts", "src/**/*.ts"]
+  "include": ["scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx"]
 }
