@@ -1,0 +1,23 @@
+在 `createReactiveText` 中把 `node.data = getValue()` 放进 `createEffect`，并把返回的释放句柄一并交给调用方：
+
+```ts
+export function createReactiveText(getValue: () => string): Renderable<Text> {
+  const node = createText("");
+
+  // 用 createEffect 追踪 getValue() 中读取的 signal，变化时原地更新同一个 Text 节点的 .data。
+  const dispose = createEffect(() => {
+    node.data = getValue();
+  });
+
+  return { node, dispose };
+}
+```
+
+`createEffect` 在创建时会立刻同步执行一次回调，把初始文本写进 `node.data`。之后每次内部读取的 signal 发生变化，只原地改写这一个 `Text` 节点的 `.data`，不会替换节点引用，也不会波及同一父元素下的其他兄弟节点。调用 `dispose()` 后（即使重复调用），订阅立即断开，文本停在最后一次的值。
+
+保存后运行 `pnpm dev` 可以看到计数器恢复实时更新，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build` 24 条测试和构建全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 4.2-learn 4.2-solution -- src
+```

@@ -5,7 +5,7 @@ import { createElement, createReactiveText, mount } from "./dom.ts";
 import { createSignal } from "./reactive.ts";
 
 describe("响应式文本节点", () => {
-  it.skip("创建文本节点并在 signal 变化时原地更新同一个 Text 引用", () => {
+  it("创建文本节点并在 signal 变化时原地更新同一个 Text 引用", () => {
     const [count, setCount] = createSignal(0);
 
     const binding = createReactiveText(() => `Count: ${count()}`);
@@ -21,7 +21,7 @@ describe("响应式文本节点", () => {
     binding.dispose();
   });
 
-  it.skip("调用 dispose 后停止响应更新并停留在最后一次的值", () => {
+  it("调用 dispose 后停止响应更新并停留在最后一次的值", () => {
     const [count, setCount] = createSignal(0);
     const getValue = vi.fn(() => `Count: ${count()}`);
 
@@ -39,7 +39,7 @@ describe("响应式文本节点", () => {
     expect(binding.node.data).toBe("Count: 1");
   });
 
-  it.skip("重复调用 dispose 保持幂等且不抛错", () => {
+  it("重复调用 dispose 保持幂等且不抛错", () => {
     const [count, setCount] = createSignal(0);
     const binding = createReactiveText(() => String(count()));
 
@@ -50,7 +50,7 @@ describe("响应式文本节点", () => {
     expect(binding.node.data).toBe("0");
   });
 
-  it.skip("从 DOM 移除节点后调用 dispose 不再更新文本内容", () => {
+  it("从 DOM 移除节点后调用 dispose 不再更新文本内容", () => {
     const [count, setCount] = createSignal(0);
     const parent = createElement("p");
     const binding = createReactiveText(() => String(count()));

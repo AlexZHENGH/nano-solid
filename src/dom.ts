@@ -1,4 +1,3 @@
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import { createEffect, type Dispose } from "./reactive.ts";
 
 /** 可挂载到 DOM 且自带清理逻辑的渲染单元。 */
@@ -49,9 +48,9 @@ export function createReactiveText(getValue: () => string): Renderable<Text> {
   const node = createText("");
 
   // 用 createEffect 追踪 getValue() 中读取的 signal，变化时原地更新同一个 Text 节点的 .data。
-  // TODO: 用 const dispose = createEffect(() => { node.data = getValue(); }) 替换下面的占位写法。
-  node.data = getValue();
-  const dispose: Dispose = () => {};
+  const dispose = createEffect(() => {
+    node.data = getValue();
+  });
 
   return { node, dispose };
 }
