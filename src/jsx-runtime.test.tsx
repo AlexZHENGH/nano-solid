@@ -236,7 +236,7 @@ describe("响应式属性与构造失败回滚", () => {
 });
 
 describe("函数组件", () => {
-  it.skip("支持函数组件渲染，透传 props 与 children 并随卸载释放订阅", () => {
+  it("支持函数组件渲染，透传 props 与 children 并随卸载释放订阅", () => {
     const container = document.createElement("div");
     const [note, setNote] = createSignal("初始内容");
     const readNote = vi.fn(() => note());
@@ -276,7 +276,7 @@ describe("函数组件", () => {
     expect(readNote).toHaveBeenCalledTimes(2);
   });
 
-  it.skip("组件函数只在创建时执行一次，点击加减与重置不会重跑组件", () => {
+  it("组件函数只在创建时执行一次，点击加减与重置不会重跑组件", () => {
     const container = document.createElement("div");
     const onComponentRun = vi.fn();
 
@@ -350,7 +350,7 @@ describe("函数组件", () => {
     expect(onComponentRun).toHaveBeenCalledTimes(1);
   });
 
-  it.skip("函数组件卸载时成对清理内部属性订阅、文本订阅与点击监听", () => {
+  it("函数组件卸载时成对清理内部属性订阅、文本订阅与点击监听", () => {
     const container = document.createElement("div");
     const [count, setCount] = createSignal(0);
     const readClass = vi.fn(() => (count() < 0 ? "neg" : "pos"));
@@ -388,7 +388,7 @@ describe("函数组件", () => {
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
 
-  it.skip("多个同类型函数组件实例各自持有独立状态", () => {
+  it("多个同类型函数组件实例各自持有独立状态", () => {
     const container = document.createElement("div");
 
     type CounterItemProps = {

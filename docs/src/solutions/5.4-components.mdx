@@ -1,0 +1,26 @@
+在 `src/jsx-runtime.ts` 的 `jsx` 函数里，只需要把 `typeof tag === "function"` 分支改成直接调用 `tag(props as P)`：
+
+```ts
+export function jsx<K extends Tag>(tag: K, props: Props): Renderable<HTMLElementTagNameMap[K]>;
+export function jsx<P>(tag: Component<P>, props: P): Renderable;
+export function jsx<P>(tag: Tag | Component<P>, props: Props | P): Renderable {
+  // 若 tag 是函数组件，直接调用一次 tag(props) 返回它构造的 Renderable；后续细粒度更新由内部表达式自行承担。
+  if (typeof tag === "function") {
+    return tag(props as P);
+  }
+
+  const elementProps = props as Props;
+  return createRenderableElement(tag, elementProps, normalizeChildren(elementProps.children));
+}
+```
+
+因为 `jsxs` 和 `jsxDEV` 都是 `jsx` 的别名，无论函数组件不带子节点（`<App />`）还是带多个嵌套子节点（`<Card><p>A</p><p>B</p></Card>`），都会统一走进这个分支。组件函数只在挂载创建时执行这一次，返回真实的 `Renderable` 树，后续点击按钮只会唤醒对应的细粒度文本与属性 effect，卸载时整棵树的订阅和点击监听也会通过 `dispose()` 成对清理。
+
+保存后运行 `pnpm dev` 打开页面：点击 `+1`、`-1`、`重置` 时可以看到“组件函数执行次数”始终保持 `1`，而“文本节点更新次数”随每次变化递增；点击 `调用 dispose() 卸载` 后再点 `外部写入 setCount(...)` 文本不再更新，点 `重新挂载` 后组件函数执行次数才变成 `2`。
+
+运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，45 条测试和构建全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 5.4-learn 5.4-solution -- src
+```

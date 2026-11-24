@@ -91,9 +91,8 @@ export function jsx<K extends Tag>(tag: K, props: Props): Renderable<HTMLElement
 export function jsx<P>(tag: Component<P>, props: P): Renderable;
 export function jsx<P>(tag: Tag | Component<P>, props: Props | P): Renderable {
   // 若 tag 是函数组件，直接调用一次 tag(props) 返回它构造的 Renderable；后续细粒度更新由内部表达式自行承担。
-  // TODO: 若 typeof tag === "function"，返回 tag(props as P)。
   if (typeof tag === "function") {
-    throw new Error(`Function component "${tag.name || "Anonymous"}" is not implemented yet`);
+    return tag(props as P);
   }
 
   const elementProps = props as Props;
