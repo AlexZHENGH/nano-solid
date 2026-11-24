@@ -21,10 +21,9 @@ export function createSignal<T>(initialValue: T) {
    *
    * @param next 要写入的新值。
    */
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   function set(next: T): void {
     // 更新 get() 下一次读取的同一个局部变量。
-    // TODO: 把 next 写入 value。
+    value = next;
   }
 
   return [get, set] as const;

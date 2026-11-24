@@ -1,0 +1,41 @@
+`get` 每次都会读外层函数里的局部变量 `value`。在 `set` 里把 `next` 赋回 `value`（并删掉占位 lint 批注与测试里的 `.skip`），写入就会真正生效：
+
+```ts
+/**
+ * 把值留在一次调用独有的闭包里，交给同一组读写函数访问。
+ *
+ * @param initialValue 创建时保存的初始值，也决定读写函数使用的类型。
+ * @returns getter 和 setter 组成的元组。
+ */
+export function createSignal<T>(initialValue: T) {
+  let value = initialValue;
+
+  /**
+   * 读取当前闭包里保存的值。
+   *
+   * @returns 最新状态。
+   */
+  function get(): T {
+    return value;
+  }
+
+  /**
+   * 把新值写回 getter 读取的同一个闭包。
+   *
+   * @param next 要写入的新值。
+   */
+  function set(next: T): void {
+    // 更新 get() 下一次读取的同一个局部变量。
+    value = next;
+  }
+
+  return [get, set] as const;
+}
+```
+
+每次调用 `createSignal` 都会创建一个新的函数作用域，所以不同 signal 各自持有独立的 `value`，修改其中一个不会影响另一个。运行 `pnpm dev` 会依次打印 `0`、`1`、`2`，运行 `pnpm format && pnpm check && pnpm test:run` 全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 2.1-learn 2.1-solution -- src
+```

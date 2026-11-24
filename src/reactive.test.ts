@@ -6,7 +6,7 @@ it("创建后 getter 返回初始值", () => {
   expect(count()).toBe(0);
 });
 
-it.skip("写入新值后 getter 返回新值", () => {
+it("写入新值后 getter 返回新值", () => {
   const [count, setCount] = createSignal(0);
   const [other] = createSignal(10);
 
