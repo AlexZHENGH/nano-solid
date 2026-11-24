@@ -20,6 +20,7 @@ import { frontmatter as jsxRuntime } from "./lessons/5.1-jsx-runtime.mdx";
 import { frontmatter as propsEvents } from "./lessons/5.2-props-and-events.mdx";
 import { frontmatter as reactiveProps } from "./lessons/5.3-reactive-props.mdx";
 import { frontmatter as components } from "./lessons/5.4-components.mdx";
+import { frontmatter as ownershipShow } from "./lessons/6.0-ownership-and-show.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -44,6 +45,7 @@ const jsxRuntimeUrl = `${baseUrl}/lessons/5.1-jsx-runtime/`;
 const propsEventsUrl = `${baseUrl}/lessons/5.2-props-and-events/`;
 const reactivePropsUrl = `${baseUrl}/lessons/5.3-reactive-props/`;
 const componentsUrl = `${baseUrl}/lessons/5.4-components/`;
+const ownershipShowUrl = `${baseUrl}/lessons/6.0-ownership-and-show/`;
 ---
 
 <BookLayout
@@ -112,4 +114,5 @@ const componentsUrl = `${baseUrl}/lessons/5.4-components/`;
     <li><a href={reactivePropsUrl}>{reactiveProps.title}</a></li>
     <li><a href={componentsUrl}>{components.title}</a></li>
   </ul>
+  <h3 class="course-chapter"><a href={ownershipShowUrl}>{ownershipShow.title}</a></h3>
 </BookLayout>
