@@ -22,6 +22,7 @@ import { frontmatter as reactiveProps } from "./lessons/5.3-reactive-props.mdx";
 import { frontmatter as components } from "./lessons/5.4-components.mdx";
 import { frontmatter as ownershipShow } from "./lessons/6.0-ownership-and-show.mdx";
 import { frontmatter as nestedEffects } from "./lessons/6.1-nested-effects.mdx";
+import { frontmatter as rootCleanup } from "./lessons/6.2-root-and-cleanup.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -48,6 +49,7 @@ const reactivePropsUrl = `${baseUrl}/lessons/5.3-reactive-props/`;
 const componentsUrl = `${baseUrl}/lessons/5.4-components/`;
 const ownershipShowUrl = `${baseUrl}/lessons/6.0-ownership-and-show/`;
 const nestedEffectsUrl = `${baseUrl}/lessons/6.1-nested-effects/`;
+const rootCleanupUrl = `${baseUrl}/lessons/6.2-root-and-cleanup/`;
 ---
 
 <BookLayout
@@ -119,5 +121,6 @@ const nestedEffectsUrl = `${baseUrl}/lessons/6.1-nested-effects/`;
   <h3 class="course-chapter"><a href={ownershipShowUrl}>{ownershipShow.title}</a></h3>
   <ul class="course-lessons">
     <li><a href={nestedEffectsUrl}>{nestedEffects.title}</a></li>
+    <li><a href={rootCleanupUrl}>{rootCleanup.title}</a></li>
   </ul>
 </BookLayout>

@@ -1,5 +1,5 @@
-import { expect, it } from "vitest";
-import { createEffect, createSignal, type Dispose } from "./reactive.ts";
+import { expect, it, vi } from "vitest";
+import { createEffect, createRoot, createSignal, onCleanup, type Dispose } from "./reactive.ts";
 
 it("创建后 getter 返回初始值", () => {
   const [count] = createSignal(0);
@@ -413,4 +413,207 @@ it("外层 effect 创建内层 effect 后中途抛错时也会清理已创建的
   // 外层在 catch 中释放自己时，已挂入 children 的内层 effect 也必须一并清理。
   setInner(1);
   expect(innerRuns).toBe(1);
+});
+
+it.skip("createRoot 统一回收其内部创建的 effect 与 onCleanup，且释放幂等", () => {
+  const [count, setCount] = createSignal(0);
+  const seen: number[] = [];
+  const cleanup = vi.fn();
+
+  const dispose = createRoot((disposeRoot) => {
+    createEffect(() => {
+      seen.push(count());
+    });
+    onCleanup(cleanup);
+    return disposeRoot;
+  });
+
+  setCount(1);
+  expect(seen).toEqual([0, 1]);
+  expect(cleanup).toHaveBeenCalledTimes(0);
+
+  // 调用一次 dispose 释放全部资源，重复调用保持幂等。
+  dispose();
+  dispose();
+  setCount(2);
+
+  expect(seen).toEqual([0, 1]);
+  expect(cleanup).toHaveBeenCalledTimes(1);
+});
+
+it.skip("onCleanup 在同作用域内按后进先出顺序执行，无 Owner 时静默忽略", () => {
+  const order: string[] = [];
+
+  // 不在任何 root 或 effect 内调用 onCleanup 时不应报错。
+  expect(() => onCleanup(() => order.push("orphan"))).not.toThrow();
+
+  const dispose = createRoot((disposeRoot) => {
+    onCleanup(() => order.push("first"));
+    onCleanup(() => order.push("second"));
+    onCleanup(() => order.push("third"));
+    return disposeRoot;
+  });
+
+  dispose();
+  expect(order).toEqual(["third", "second", "first"]);
+});
+
+it.skip("createEffect 内的 onCleanup 会在每次重跑前和最终释放时自动执行", () => {
+  const [count, setCount] = createSignal(0);
+  const events: string[] = [];
+
+  const dispose = createEffect(() => {
+    const current = count();
+    events.push(`run:${current}`);
+    onCleanup(() => {
+      events.push(`cleanup:${current}`);
+    });
+  });
+
+  setCount(1);
+  setCount(2);
+  dispose();
+
+  expect(events).toEqual(["run:0", "cleanup:0", "run:1", "cleanup:1", "run:2", "cleanup:2"]);
+});
+
+it.skip("createRoot 隔离外层依赖追踪与所有权，退出后恢复外层上下文", () => {
+  const [outer, setOuter] = createSignal(0);
+  const [inside, setInside] = createSignal(0);
+  const [after, setAfter] = createSignal(0);
+  let outerRuns = 0;
+  let rootDisposed = 0;
+  let disposeDetached: Dispose | undefined;
+
+  const disposeOuter = createEffect(() => {
+    outer();
+    outerRuns += 1;
+
+    if (!disposeDetached) {
+      disposeDetached = createRoot((disposeRoot) => {
+        // createRoot 内的普通读值不应成为外层 effect 的依赖。
+        inside();
+        onCleanup(() => {
+          rootDisposed += 1;
+        });
+        return disposeRoot;
+      });
+    }
+
+    // 退出 createRoot 后必须恢复外层追踪上下文。
+    after();
+  });
+
+  expect(outerRuns).toBe(1);
+
+  // 修改仅在 createRoot 内读过的 inside，不应唤醒外层 effect。
+  setInside(1);
+  expect(outerRuns).toBe(1);
+
+  // 重跑与释放外层 effect 时，独立的 createRoot 不会被误杀。
+  setOuter(1);
+  setAfter(1);
+  expect(outerRuns).toBe(3);
+  expect(rootDisposed).toBe(0);
+
+  disposeOuter();
+  expect(rootDisposed).toBe(0);
+
+  disposeDetached?.();
+  expect(rootDisposed).toBe(1);
+});
+
+it.skip("createRoot 的 setup 中途抛错时会先清理已建资源再原样重抛", () => {
+  const [count, setCount] = createSignal(0);
+  let runs = 0;
+  const order: string[] = [];
+
+  expect(() => {
+    createRoot(() => {
+      onCleanup(() => order.push("cleanup-1"));
+      createEffect(() => {
+        count();
+        runs += 1;
+        onCleanup(() => order.push("effect-cleanup"));
+      });
+      onCleanup(() => order.push("cleanup-2"));
+      throw new Error("setup failed");
+    });
+  }).toThrow("setup failed");
+
+  expect(runs).toBe(1);
+  // 子 effect 先于父作用域的 LIFO 清理回调被释放，后续写入不再唤醒它。
+  expect(order).toEqual(["effect-cleanup", "cleanup-2", "cleanup-1"]);
+  setCount(1);
+  expect(runs).toBe(1);
+});
+
+it.skip("onCleanup 回调在非追踪环境下执行，不会误把读值登记为外层依赖", () => {
+  const [trigger, setTrigger] = createSignal(0);
+  const [secret, setSecret] = createSignal(0);
+  let outerRuns = 0;
+
+  createEffect(() => {
+    const current = trigger();
+    outerRuns += 1;
+    onCleanup(() => {
+      // 清理阶段读到 secret() 时不应把它变成外层 effect 的依赖。
+      secret();
+    });
+    if (current > 10) return;
+  });
+
+  expect(outerRuns).toBe(1);
+  setTrigger(1);
+  expect(outerRuns).toBe(2);
+
+  // 上一轮清理时读过 secret()，但修改 secret 不应触发重跑。
+  setSecret(1);
+  expect(outerRuns).toBe(2);
+});
+
+it.skip("清理回调抛错时仍释放兄弟 effect 和父作用域", () => {
+  const [count, setCount] = createSignal(0);
+  const observed = vi.fn();
+  const cleanups: string[] = [];
+  const failure = new Error("清理失败");
+
+  // 故意让后创建的 effect 先释放并抛错，检查其余回调与兄弟 effect 仍会清理。
+  const dispose = createRoot((dispose) => {
+    onCleanup(() => cleanups.push("父作用域"));
+    createEffect(() => observed(count()));
+    createEffect(() => {
+      onCleanup(() => cleanups.push("其余回调"));
+      onCleanup(() => {
+        throw failure;
+      });
+    });
+    return dispose;
+  });
+
+  expect(dispose).toThrow(failure);
+  dispose();
+  setCount(1);
+  expect(cleanups).toEqual(["其余回调", "父作用域"]);
+  expect(observed.mock.calls).toEqual([[0]]);
+});
+
+it.skip("初始化失败时完成回滚并重抛原始异常", () => {
+  const failure = new Error("初始化失败");
+  const cleanup = vi.fn();
+
+  // 两种入口的回滚都会遇到清理异常，应留下初次失败的原因。
+  for (const setup of [createRoot, createEffect]) {
+    expect(() =>
+      setup(() => {
+        onCleanup(cleanup);
+        onCleanup(() => {
+          throw new Error("清理失败");
+        });
+        throw failure;
+      }),
+    ).toThrow(failure);
+  }
+
+  expect(cleanup).toHaveBeenCalledTimes(2);
 });
