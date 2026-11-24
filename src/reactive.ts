@@ -42,7 +42,7 @@ function disposeEffect(effect: Effect): void {
 }
 
 /**
- * 在追踪上下文中执行 effect：跳过已释放节点，先清理上一轮依赖，再运行回调重建本轮订阅，并在退出时恢复外层记录。
+ * 在追踪上下文中执行 effect：跳过已释放节点，清理上一轮依赖，运行回调重建本轮订阅；若中途抛错则释放半截订阅，最后恢复外层记录。
  *
  * @param effect 本轮要执行的 effect 节点。
  */
@@ -50,11 +50,12 @@ function runEffect(effect: Effect): void {
   // 同一轮通知快照里，前面的 effect 可能已经释放了当前节点，进入前必须先跳过。
   if (effect.disposed) return;
   cleanupDependencies(effect);
-  // 保存外层 effect，并在 try/finally 中恢复，避免嵌套或抛错后残留旧引用。
+  // 保存外层 effect，并在 try/finally 中恢复；若回调抛错，则在 catch 中释放半截订阅后继续抛出。
   const previous = currentEffect;
   currentEffect = effect;
   try {
     effect.callback();
+    // TODO: 补充 catch (error) 分支，先调用 disposeEffect(effect) 再重新抛出 error。
   } finally {
     currentEffect = previous;
   }

@@ -241,3 +241,71 @@ it("effect 在回调中释放自己后不再响应后续写入", () => {
 
   expect(runs).toBe(2);
 });
+
+it.skip("首次执行读值后抛错会清理半截订阅并继续抛出异常", () => {
+  const [count, setCount] = createSignal(0);
+  let runs = 0;
+
+  // 先读 count() 建立订阅再抛错，调用方拿不到 dispose 句柄，必须由框架自动释放。
+  expect(() => {
+    createEffect(() => {
+      runs += 1;
+      count();
+      throw new Error("boom");
+    });
+  }).toThrow("boom");
+
+  expect(runs).toBe(1);
+  // 后续写入不应再唤醒已经失败的 effect，也不应再次抛错。
+  setCount(1);
+  expect(runs).toBe(1);
+});
+
+it.skip("重跑中途读值后抛错会释放该 effect 且不再响应后续写入", () => {
+  const [count, setCount] = createSignal(0);
+  let runs = 0;
+
+  createEffect(() => {
+    runs += 1;
+    if (count() === 1) {
+      throw new Error("boom");
+    }
+  });
+
+  expect(runs).toBe(1);
+  expect(() => setCount(1)).toThrow("boom");
+  expect(runs).toBe(2);
+
+  // 抛错前读到的 count() 已在 catch 中清理，再次更新不会继续触发。
+  setCount(2);
+  expect(runs).toBe(2);
+});
+
+it.skip("内层 effect 抛错释放自己时不会影响外层 effect 继续追踪", () => {
+  const [inner, setInner] = createSignal(0);
+  const [outer, setOuter] = createSignal(0);
+  let innerRuns = 0;
+  const outerSeen: number[] = [];
+
+  createEffect(() => {
+    try {
+      createEffect(() => {
+        innerRuns += 1;
+        inner();
+        throw new Error("inner boom");
+      });
+    } catch {
+      // 外层接住内层抛出的异常后继续读取自己的依赖。
+    }
+    outerSeen.push(outer());
+  });
+
+  expect(innerRuns).toBe(1);
+  // 内层已自动释放，改 inner 不会再次触发内层或抛错。
+  setInner(1);
+  expect(innerRuns).toBe(1);
+
+  // 外层上下文已在 finally 中恢复，改 outer 仍会正常重跑。
+  setOuter(1);
+  expect(outerSeen).toEqual([0, 1]);
+});

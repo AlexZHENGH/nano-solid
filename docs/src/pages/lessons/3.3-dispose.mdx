@@ -45,7 +45,7 @@ sequenceDiagram
 ```
 
 > [!NOTE]
-> 这里抽出来的内部辅助函数 `disposeEffect(effect)` 也会在下一节派上用场：当回调读完部分 signal 后抛错时，直接复用它清理半截订阅。
+> 这里抽出来的内部辅助函数 `disposeEffect(effect)` 也会在 [3.4 清理抛错留下的订阅](../3.4-throw-cleanup/) 派上用场：当回调读完部分 signal 后抛错时，直接复用它清理半截订阅。
 
 ## 预期效果
 

@@ -3,7 +3,19 @@ import { createEffect, createSignal } from "./reactive.ts";
 
 const [count, setCount] = createSignal(0);
 
-const dispose = createEffect(() => console.log(count()));
-setCount(1);
-dispose();
-setCount(2);
+try {
+  createEffect(() => {
+    const current = count();
+    console.log("effect run:", current);
+    throw new Error("boom");
+  });
+} catch (error) {
+  console.log("caught:", (error as Error).message);
+}
+
+try {
+  setCount(1);
+  console.log("setCount(1) ok");
+} catch (error) {
+  console.log("setCount(1) failed:", (error as Error).message);
+}
