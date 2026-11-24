@@ -1,0 +1,46 @@
+总共补齐三处：核心释放逻辑 `disposeEffect`，以及 `runEffect` 和 `get` 两道释放守卫。
+
+先实现 `disposeEffect(effect)`，确保重复调用幂等，并复用 [3.2](../3.2-dynamic-dependencies/) 的 `cleanupDependencies(effect)` 断开双向订阅：
+
+```ts
+function disposeEffect(effect: Effect): void {
+  // 已经释放过时直接返回，否则标记 disposed 并清理全部双向订阅。
+  if (effect.disposed) return;
+  effect.disposed = true;
+  cleanupDependencies(effect);
+}
+```
+
+接着在 `runEffect(effect)` 入口拦截已释放的节点，避免同一轮 `Array.from(subscribers)` 快照里排在后面的 effect 被前面释放后仍然执行：
+
+```ts
+function runEffect(effect: Effect): void {
+  // 同一轮通知快照里，前面的 effect 可能已经释放了当前节点，进入前必须先跳过。
+  if (effect.disposed) return;
+  cleanupDependencies(effect);
+  // ...
+}
+```
+
+最后在 `get()` 里拦住“回调中途自释放后又读了一次 signal”的情况，防止把已经释放的节点重新塞回 `subscribers`：
+
+```ts
+function get(): T {
+  // 只有在同步执行中的 effect 读值时，才把它和当前 signal 互相登记。
+  if (currentEffect) {
+    // effect 在回调中途自释放后，后续读值不应把它重新挂回 subscribers。
+    if (currentEffect.disposed) return value;
+    subscribers.add(currentEffect);
+    // 反向记录当前 signal 的 subscribers 集合，方便下次重跑前精准清理旧依赖。
+    currentEffect.dependencies.add(subscribers);
+  }
+  return value;
+}
+```
+
+保存后运行 `pnpm dev` 只会打印 `0`、`1`，运行 `pnpm format && pnpm check && pnpm test:run` 15 条测试全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 3.3-learn 3.3-solution -- src
+```

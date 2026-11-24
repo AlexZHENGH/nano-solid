@@ -34,10 +34,11 @@ function cleanupDependencies(effect: Effect): void {
  *
  * @param effect 需要停止响应的 effect 节点。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function disposeEffect(effect: Effect): void {
   // 已经释放过时直接返回，否则标记 disposed 并清理全部双向订阅。
-  // TODO: 若 effect.disposed 为 true 直接返回，否则置为 true 并调用 cleanupDependencies(effect)。
+  if (effect.disposed) return;
+  effect.disposed = true;
+  cleanupDependencies(effect);
 }
 
 /**
@@ -47,7 +48,7 @@ function disposeEffect(effect: Effect): void {
  */
 function runEffect(effect: Effect): void {
   // 同一轮通知快照里，前面的 effect 可能已经释放了当前节点，进入前必须先跳过。
-  // TODO: 若 effect.disposed 为 true，直接返回。
+  if (effect.disposed) return;
   cleanupDependencies(effect);
   // 保存外层 effect，并在 try/finally 中恢复，避免嵌套或抛错后残留旧引用。
   const previous = currentEffect;
@@ -95,7 +96,7 @@ export function createSignal<T>(initialValue: T) {
     // 只有在同步执行中的 effect 读值时，才把它和当前 signal 互相登记。
     if (currentEffect) {
       // effect 在回调中途自释放后，后续读值不应把它重新挂回 subscribers。
-      // TODO: 若 currentEffect.disposed 为 true，直接返回 value。
+      if (currentEffect.disposed) return value;
       subscribers.add(currentEffect);
       // 反向记录当前 signal 的 subscribers 集合，方便下次重跑前精准清理旧依赖。
       currentEffect.dependencies.add(subscribers);

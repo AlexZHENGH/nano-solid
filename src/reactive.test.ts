@@ -181,7 +181,7 @@ it("切回原分支后会重新追踪原分支并放弃另一侧", () => {
   expect(seen).toEqual([0, 10, 0, 2]);
 });
 
-it.skip("调用 dispose 后不再响应后续写入，且重复调用安全", () => {
+it("调用 dispose 后不再响应后续写入，且重复调用安全", () => {
   const [count, setCount] = createSignal(0);
   const seen: number[] = [];
 
@@ -199,7 +199,7 @@ it.skip("调用 dispose 后不再响应后续写入，且重复调用安全", ()
   expect(seen).toEqual([0, 1]);
 });
 
-it.skip("同一轮通知中前一个 effect 释放后一个 effect 时会跳过执行", () => {
+it("同一轮通知中前一个 effect 释放后一个 effect 时会跳过执行", () => {
   const [count, setCount] = createSignal(0);
   let secondRuns = 0;
   let disposeSecond: Dispose | undefined;
@@ -221,7 +221,7 @@ it.skip("同一轮通知中前一个 effect 释放后一个 effect 时会跳过�
   expect(secondRuns).toBe(1);
 });
 
-it.skip("effect 在回调中释放自己后不再响应后续写入", () => {
+it("effect 在回调中释放自己后不再响应后续写入", () => {
   const [count, setCount] = createSignal(0);
   const [other, setOther] = createSignal(0);
   let runs = 0;
