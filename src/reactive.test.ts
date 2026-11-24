@@ -415,7 +415,7 @@ it("外层 effect 创建内层 effect 后中途抛错时也会清理已创建的
   expect(innerRuns).toBe(1);
 });
 
-it.skip("createRoot 统一回收其内部创建的 effect 与 onCleanup，且释放幂等", () => {
+it("createRoot 统一回收其内部创建的 effect 与 onCleanup，且释放幂等", () => {
   const [count, setCount] = createSignal(0);
   const seen: number[] = [];
   const cleanup = vi.fn();
@@ -441,7 +441,7 @@ it.skip("createRoot 统一回收其内部创建的 effect 与 onCleanup，且释
   expect(cleanup).toHaveBeenCalledTimes(1);
 });
 
-it.skip("onCleanup 在同作用域内按后进先出顺序执行，无 Owner 时静默忽略", () => {
+it("onCleanup 在同作用域内按后进先出顺序执行，无 Owner 时静默忽略", () => {
   const order: string[] = [];
 
   // 不在任何 root 或 effect 内调用 onCleanup 时不应报错。
@@ -458,7 +458,7 @@ it.skip("onCleanup 在同作用域内按后进先出顺序执行，无 Owner 时
   expect(order).toEqual(["third", "second", "first"]);
 });
 
-it.skip("createEffect 内的 onCleanup 会在每次重跑前和最终释放时自动执行", () => {
+it("createEffect 内的 onCleanup 会在每次重跑前和最终释放时自动执行", () => {
   const [count, setCount] = createSignal(0);
   const events: string[] = [];
 
@@ -477,7 +477,7 @@ it.skip("createEffect 内的 onCleanup 会在每次重跑前和最终释放时�
   expect(events).toEqual(["run:0", "cleanup:0", "run:1", "cleanup:1", "run:2", "cleanup:2"]);
 });
 
-it.skip("createRoot 隔离外层依赖追踪与所有权，退出后恢复外层上下文", () => {
+it("createRoot 隔离外层依赖追踪与所有权，退出后恢复外层上下文", () => {
   const [outer, setOuter] = createSignal(0);
   const [inside, setInside] = createSignal(0);
   const [after, setAfter] = createSignal(0);
@@ -523,7 +523,7 @@ it.skip("createRoot 隔离外层依赖追踪与所有权，退出后恢复外层
   expect(rootDisposed).toBe(1);
 });
 
-it.skip("createRoot 的 setup 中途抛错时会先清理已建资源再原样重抛", () => {
+it("createRoot 的 setup 中途抛错时会先清理已建资源再原样重抛", () => {
   const [count, setCount] = createSignal(0);
   let runs = 0;
   const order: string[] = [];
@@ -548,7 +548,7 @@ it.skip("createRoot 的 setup 中途抛错时会先清理已建资源再原样�
   expect(runs).toBe(1);
 });
 
-it.skip("onCleanup 回调在非追踪环境下执行，不会误把读值登记为外层依赖", () => {
+it("onCleanup 回调在非追踪环境下执行，不会误把读值登记为外层依赖", () => {
   const [trigger, setTrigger] = createSignal(0);
   const [secret, setSecret] = createSignal(0);
   let outerRuns = 0;
@@ -572,7 +572,7 @@ it.skip("onCleanup 回调在非追踪环境下执行，不会误把读值登记�
   expect(outerRuns).toBe(2);
 });
 
-it.skip("清理回调抛错时仍释放兄弟 effect 和父作用域", () => {
+it("清理回调抛错时仍释放兄弟 effect 和父作用域", () => {
   const [count, setCount] = createSignal(0);
   const observed = vi.fn();
   const cleanups: string[] = [];
@@ -598,7 +598,7 @@ it.skip("清理回调抛错时仍释放兄弟 effect 和父作用域", () => {
   expect(observed.mock.calls).toEqual([[0]]);
 });
 
-it.skip("初始化失败时完成回滚并重抛原始异常", () => {
+it("初始化失败时完成回滚并重抛原始异常", () => {
   const failure = new Error("初始化失败");
   const cleanup = vi.fn();
 

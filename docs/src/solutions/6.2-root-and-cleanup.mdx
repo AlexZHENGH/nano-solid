@@ -1,0 +1,69 @@
+先实现 `runCleanups`，把 `owner.cleanups` 取出清空后按逆序执行，并在执行期间把 `currentEffect` 与 `currentOwner` 暂存并置空：
+
+```ts
+function runCleanups(owner: Owner, errors: unknown[]): void {
+  // 先取出并清空 owner.cleanups，再在置空 currentEffect / currentOwner 的上下文中逆序执行，最后恢复外层上下文。
+  if (owner.cleanups.length === 0) return;
+  const cleanups = owner.cleanups.splice(0).reverse();
+  const previousEffect = currentEffect;
+  const previousOwner = currentOwner;
+  currentEffect = undefined;
+  currentOwner = undefined;
+  try {
+    for (const cleanup of cleanups) {
+      // 记录异常，再继续执行余下的回调。
+      try {
+        cleanup();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+  } finally {
+    currentEffect = previousEffect;
+    currentOwner = previousOwner;
+  }
+}
+```
+
+`dispose(owner)` 在所有清理都结束后才报告记录的异常。`setup` 抛错时直接调用 `disposeOwner(root, [])` 完成回滚，再抛出原来的异常。接着补齐 `onCleanup` 与 `createRoot`。
+
+```ts
+export function onCleanup(cleanup: Dispose): void {
+  // 仅当存在未释放的 currentOwner 时登记回调；无 Owner 上下文时静默跳过，避免独立构造节点报错。
+  if (currentOwner && !currentOwner.disposed) {
+    currentOwner.cleanups.push(cleanup);
+  }
+}
+
+export function createRoot<T>(setup: (dispose: Dispose) => T): T {
+  // 建立独立的 root Owner，在暂存外层 currentEffect / currentOwner 后置空追踪上下文并切换到 root，初始化抛错时完成回滚并保留原始异常。
+  const root: Owner = {
+    parent: undefined,
+    children: new Set(),
+    cleanups: [],
+    disposed: false,
+  };
+  const disposeRoot: Dispose = () => dispose(root);
+  const previousEffect = currentEffect;
+  const previousOwner = currentOwner;
+  currentEffect = undefined;
+  currentOwner = root;
+  try {
+    return setup(disposeRoot);
+  } catch (error) {
+    // 回滚结束后，把初始化时的异常交给调用者。
+    disposeOwner(root, []);
+    throw error;
+  } finally {
+    currentEffect = previousEffect;
+    currentOwner = previousOwner;
+  }
+}
+```
+
+删掉临时 `oxlint-disable-next-line` 注释并启用 8 条测试后运行 `pnpm format && pnpm check && pnpm test:run`，57 条测试全部通过。现在我们已经拥有完整的所有权内核，下一节就可以正式退掉 `Renderable`、把整棵 DOM 树的生命周期交给 `createRoot` 与 `onCleanup`。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 6.2-learn 6.2-solution -- src
+```

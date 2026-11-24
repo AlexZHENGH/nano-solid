@@ -63,14 +63,27 @@ function cleanupChildren(owner: Owner, errors: unknown[]): void {
  * @param errors 本次清理遇到的异常，记录后继续处理其余资源。
  * @param owner 即将重跑或待释放的所有权节点。
  */
-function runCleanups(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  owner: Owner,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  errors: unknown[],
-): void {
+function runCleanups(owner: Owner, errors: unknown[]): void {
   // 先取出并清空 owner.cleanups，再在置空 currentEffect / currentOwner 的上下文中逆序执行，最后恢复外层上下文。
-  // TODO: 若 owner.cleanups 非空，取出 owner.cleanups.splice(0).reverse()，在暂存并置空 currentEffect 与 currentOwner 的 try/finally 中依次调用清理回调，逐个捕获异常并存入 errors。
+  if (owner.cleanups.length === 0) return;
+  const cleanups = owner.cleanups.splice(0).reverse();
+  const previousEffect = currentEffect;
+  const previousOwner = currentOwner;
+  currentEffect = undefined;
+  currentOwner = undefined;
+  try {
+    for (const cleanup of cleanups) {
+      // 回调属于用户代码。记录这次失败后，继续执行下一条清理。
+      try {
+        cleanup();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+  } finally {
+    currentEffect = previousEffect;
+    currentOwner = previousOwner;
+  }
 }
 
 /**
@@ -148,10 +161,11 @@ function runEffect(effect: Effect): void {
  *
  * @param cleanup 作用域重跑前或销毁时需要执行的资源释放函数。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 export function onCleanup(cleanup: Dispose): void {
   // 仅当存在未释放的 currentOwner 时登记回调；无 Owner 上下文时静默跳过，避免独立构造节点报错。
-  // TODO: 若 currentOwner && !currentOwner.disposed，将 cleanup 推入 currentOwner.cleanups。
+  if (currentOwner && !currentOwner.disposed) {
+    currentOwner.cleanups.push(cleanup);
+  }
 }
 
 /**
@@ -162,8 +176,27 @@ export function onCleanup(cleanup: Dispose): void {
  */
 export function createRoot<T>(setup: (dispose: Dispose) => T): T {
   // 建立独立的 root Owner，在暂存外层 currentEffect / currentOwner 后置空追踪上下文并切换到 root，初始化抛错时完成回滚并保留原始异常。
-  // TODO: 创建 parent 为 undefined 的 root Owner 与 disposeRoot = () => dispose(root)，隔离上下文后运行 setup。异常时调用 disposeOwner(root, []) 完成回滚，再抛出初始化异常。
-  return setup(() => {});
+  const root: Owner = {
+    parent: undefined,
+    children: new Set(),
+    cleanups: [],
+    disposed: false,
+  };
+  const disposeRoot: Dispose = () => dispose(root);
+  const previousEffect = currentEffect;
+  const previousOwner = currentOwner;
+  currentEffect = undefined;
+  currentOwner = root;
+  try {
+    return setup(disposeRoot);
+  } catch (error) {
+    // 初始化异常是失败的原因，回滚产生的清理异常不能覆盖它。
+    disposeOwner(root, []);
+    throw error;
+  } finally {
+    currentEffect = previousEffect;
+    currentOwner = previousOwner;
+  }
 }
 
 /**
