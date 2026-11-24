@@ -6,11 +6,12 @@ export type Renderable<T extends Node = Node> = {
   dispose: Dispose;
 };
 
-/** 原生 HTML 元素支持的静态属性与点击事件。 */
+/** 原生 HTML 元素支持的静态/响应式属性与点击事件。 */
 export type ElementProps = {
   id?: string;
   type?: string;
-  class?: string;
+  class?: string | (() => string);
+  disabled?: boolean | (() => boolean);
   onClick?: (event: MouseEvent) => void;
 };
 
@@ -75,12 +76,28 @@ export function createStaticText(value: string): Renderable<Text> {
 }
 
 /**
- * 创建指定标签的 HTML 元素，应用属性与事件监听、挂载全部子节点，并返回能递归释放整棵子树的 Renderable。
+ * 统一绑定静态或响应式属性：静态值立即写入，函数 getter 交给 createEffect 追踪并返回释放句柄。
+ *
+ * @param value 静态属性值或读取响应式状态的 getter。
+ * @param apply 将最新值写入真实 DOM 属性的函数。
+ * @returns 停止该属性订阅的释放函数（静态值返回空函数）。
+ */
+function bindProperty<T>(value: T | (() => T), apply: (next: T) => void): Dispose {
+  // 函数形态表示响应式属性，需要用 createEffect 追踪并在值变化时重新 apply；静态值直接写入一次即可。
+  // TODO: 若 typeof value === "function"，返回 createEffect(() => apply((value as () => T)()))；否则调用 apply(value) 并返回空函数。
+  if (typeof value !== "function") {
+    apply(value);
+  }
+  return () => {};
+}
+
+/**
+ * 创建指定标签的 HTML 元素，应用静态/响应式属性与事件监听、挂载全部子节点，并在构造失败时回滚已建立的资源。
  *
  * @param tag HTML 标签名。
- * @param props 元素的静态属性与事件回调。
+ * @param props 元素的静态/响应式属性与事件回调。
  * @param children 需要挂载到当前元素下的子节点列表。
- * @returns 包含当前元素节点与级联释放函数的 Renderable。
+ * @returns 包含当前元素节点与幂等级联释放函数的 Renderable。
  */
 export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -90,34 +107,52 @@ export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
   const node = createElement(tag);
   // 宽化为 HTMLElement，使 addEventListener("click", ...) 命中 MouseEvent 重载。
   const element: HTMLElement = node;
+  const disposers: Dispose[] = [];
+  let disposed = false;
 
-  // 把静态属性（id、class、type）写入元素，并在提供 onClick 时绑定点击监听。
+  function dispose(): void {
+    // 幂等守卫：构造失败回滚或外部重复释放时只执行一次清理。
+    if (disposed) return;
+    disposed = true;
+
+    // 释放元素时先移除事件监听、停止所有属性 effect，再沿树递归释放全部子节点。
+    if (props.onClick) {
+      element.removeEventListener("click", props.onClick);
+    }
+    for (const disposer of disposers) {
+      disposer();
+    }
+    for (const child of children) {
+      child.dispose();
+    }
+  }
+
+  // 构造中途若属性校验失败或响应式 getter 抛错，必须调用 dispose() 回滚已建立的订阅、监听与 children，再重新抛出异常。
+  // TODO: 用 try / catch 包裹下面的属性绑定与子节点挂载逻辑；catch (error) 中先调用 dispose() 再重新 throw error。
   if (props.id !== undefined) {
     element.id = props.id;
-  }
-  if (props.class !== undefined) {
-    element.className = props.class;
   }
   if (props.type !== undefined) {
     element.setAttribute("type", props.type);
   }
+  if (props.class !== undefined) {
+    disposers.push(
+      bindProperty(props.class, (value) => {
+        element.className = value;
+      }),
+    );
+  }
   if (props.onClick) {
     element.addEventListener("click", props.onClick);
+  }
+  if (props.disabled !== undefined) {
+    // 仅按钮元素支持 disabled 属性，对非按钮标签提前显式报错，按钮则通过 bindProperty 写入 element.disabled。
+    // TODO: 若 !(element instanceof HTMLButtonElement) 抛出 Error(`The "disabled" prop is not supported on <${tag}>`)，否则用 bindProperty 绑定 element.disabled 并收集其 dispose。
   }
 
   // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
   for (const child of children) {
     mount(element, child.node);
-  }
-
-  function dispose(): void {
-    // 释放元素时先成对移除 click 监听，再沿树递归释放所有子节点。
-    if (props.onClick) {
-      element.removeEventListener("click", props.onClick);
-    }
-    for (const child of children) {
-      child.dispose();
-    }
   }
 
   return { node, dispose };

@@ -1,9 +1,9 @@
-// 浏览器入口：使用 JSX 声明静态属性与 onClick 事件，动态 class 暂由外部 createEffect 更新。
+// 浏览器入口：所有动态 class 与 disabled 均由 JSX 响应式属性直接驱动，不再手写外层 createEffect。
 import { createElement, render, type Renderable } from "./dom.ts";
-import { createEffect, createSignal, type Dispose } from "./reactive.ts";
+import { createSignal, type Dispose } from "./reactive.ts";
 
 /**
- * 组装计数器核心视图树，所有响应式文本与按钮事件都随根 Renderable 一起释放。
+ * 组装计数器核心视图树：负数切换警示色、计数为 0 时自动禁用重置按钮。
  *
  * @param count 读取当前计数值的 signal getter。
  * @param setCount 更新计数值的 signal setter。
@@ -17,10 +17,14 @@ function createCounterView(
 ): Renderable {
   return (
     <div>
-      {/* 计数展示区：左侧静态标签，右侧用函数子节点原地刷新同一个 Text 节点。 */}
+      {/* 计数展示区：负数时通过响应式 class 切换为警示色。 */}
       <div class="ns-counter-display">
         <span class="ns-counter-label">当前计数</span>
-        <span class="ns-counter-value">
+        <span
+          class={() =>
+            count() < 0 ? "ns-counter-value ns-counter-value-negative" : "ns-counter-value"
+          }
+        >
           {() => {
             const current = count();
             onTextUpdate();
@@ -28,7 +32,7 @@ function createCounterView(
           }}
         </span>
       </div>
-      {/* 操作按钮栏：通过 JSX 直接声明 type、class 与 onClick，卸载时自动成对解绑。 */}
+      {/* 操作按钮栏：计数为 0 时通过响应式 disabled 自动禁用重置按钮。 */}
       <div class="ns-actions">
         <button type="button" class="ns-btn" onClick={() => setCount(count() + 1)}>
           +1
@@ -36,7 +40,12 @@ function createCounterView(
         <button type="button" class="ns-btn" onClick={() => setCount(count() - 1)}>
           -1
         </button>
-        <button type="button" class="ns-btn" onClick={() => setCount(0)}>
+        <button
+          type="button"
+          class="ns-btn"
+          disabled={() => count() === 0}
+          onClick={() => setCount(0)}
+        >
           重置
         </button>
       </div>
@@ -67,49 +76,39 @@ if (app) {
     setTextUpdates(updateCount);
   };
 
-  // 2. 独立挂载宿主：卸载时只操作 host 内部，不影响外层卡片壳。
+  // 2. 独立挂载宿主与当前活跃子视图的卸载句柄。
   const host = createElement("div");
-
-  // 3. 挂载状态徽章与卸载切换按钮：目前动态 class 仍由外部 createEffect 更新。
-  const badge = <span>{() => (mounted() ? "已挂载" : "已卸载")}</span>;
-  createEffect(() => {
-    (badge.node as HTMLSpanElement).className = mounted() ? "ns-badge" : "ns-badge ns-badge-muted";
-  });
-
   let unmountActiveView: Dispose | undefined;
-  const toggleButton = (
-    <button
-      type="button"
-      onClick={() => {
-        unmountActiveView?.();
-        const nextMounted = !mounted();
-        setMounted(nextMounted);
-        unmountActiveView = render(
-          nextMounted ? createCounterView(count, setCount, recordTextUpdate) : createEmptyView(),
-          host,
-        );
-      }}
-    >
-      {() => (mounted() ? "调用 dispose() 卸载" : "重新挂载")}
-    </button>
-  );
-  createEffect(() => {
-    (toggleButton.node as HTMLButtonElement).className = mounted()
-      ? "ns-btn ns-btn-danger"
-      : "ns-btn";
-  });
 
-  // 4. 用 JSX 拼装外层卡片并挂入 #app，再把初始计数器视图挂进独立宿主 host。
+  // 3. 用纯 JSX 拼装外层卡片：状态徽章与卸载切换按钮的 class 均由响应式属性驱动。
   const card = (
     <section class="ns-card">
       <div class="ns-card-header">
         <h1 class="ns-card-title">nano-solid 计数器</h1>
-        {badge}
+        <span class={() => (mounted() ? "ns-badge" : "ns-badge ns-badge-muted")}>
+          {() => (mounted() ? "已挂载" : "已卸载")}
+        </span>
       </div>
       {{ node: host, dispose: () => {} }}
       <hr class="ns-divider" />
       <div class="ns-actions">
-        {toggleButton}
+        <button
+          type="button"
+          class={() => (mounted() ? "ns-btn ns-btn-danger" : "ns-btn")}
+          onClick={() => {
+            unmountActiveView?.();
+            const nextMounted = !mounted();
+            setMounted(nextMounted);
+            unmountActiveView = render(
+              nextMounted
+                ? createCounterView(count, setCount, recordTextUpdate)
+                : createEmptyView(),
+              host,
+            );
+          }}
+        >
+          {() => (mounted() ? "调用 dispose() 卸载" : "重新挂载")}
+        </button>
         <button type="button" class="ns-btn" onClick={() => setCount(count() + 1)}>
           {() => `外部写入 setCount(${count() + 1})`}
         </button>
@@ -121,6 +120,7 @@ if (app) {
     </section>
   );
 
+  // 4. 挂载外层卡片并初始化计数器子视图。
   render(card, app);
   unmountActiveView = render(createCounterView(count, setCount, recordTextUpdate), host);
 }

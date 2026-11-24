@@ -48,7 +48,7 @@ export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
 - **`onClick`**：在构造阶段调用 `node.addEventListener("click", onClick)`，并在返回的 `dispose()` 里用同一个函数引用调用 `node.removeEventListener("click", onClick)`，保证整棵树卸载时不会残留任何事件监听。
 
 > [!NOTE]
-> 注意区分两种“传给属性的函数”：上面例子里的 `onClick` 接收的是**事件回调**，只在用户点击时由浏览器调用，绝对不能放进 `createEffect` 里执行。下一节要实现的动态 `class={() => ...}` 和 `disabled={() => ...}` 才是**响应式属性 getter**，需要交给 `createEffect` 追踪并同步到 DOM。
+> 注意区分两种“传给属性的函数”：上面例子里的 `onClick` 接收的是**事件回调**，只在用户点击时由浏览器调用，绝对不能放进 `createEffect` 里执行。[5.3](../5.3-reactive-props/) 要实现的动态 `class={() => ...}` 和 `disabled={() => ...}` 才是**响应式属性 getter**，需要交给 `createEffect` 追踪并同步到 DOM。
 
 > [!PRACTICE]
 >
