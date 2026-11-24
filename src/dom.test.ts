@@ -200,7 +200,7 @@ describe("render 延迟挂载与卸载", () => {
     expect(container.childNodes.length).toBe(0);
   });
 
-  it.skip("支持挂载 DocumentFragment，卸载时完整移除其全部子节点并保留容器兄弟节点", () => {
+  it("支持挂载 DocumentFragment，卸载时完整移除其全部子节点并保留容器兄弟节点", () => {
     const container = createElement("div");
     const sibling = createElement("span", {}, [createText("原有兄弟")]);
     container.appendChild(sibling);
@@ -221,7 +221,7 @@ describe("render 延迟挂载与卸载", () => {
     expect(container.firstChild).toBe(sibling);
   });
 
-  it.skip("卸载期间若有 onCleanup 抛错，仍会在 finally 中移除已挂载的 DOM 节点", () => {
+  it("卸载期间若有 onCleanup 抛错，仍会在 finally 中移除已挂载的 DOM 节点", () => {
     const container = createElement("div");
 
     const unmount = render(() => {
@@ -237,7 +237,7 @@ describe("render 延迟挂载与卸载", () => {
     expect(container.childNodes.length).toBe(0);
   });
 
-  it.skip("节点在卸载前已被外部移到其他容器时，unmount 不会误删它", () => {
+  it("节点在卸载前已被外部移到其他容器时，unmount 不会误删它", () => {
     const container = createElement("div");
     const otherContainer = createElement("div");
     let mounted!: HTMLElement;

@@ -1,0 +1,43 @@
+补齐 `src/dom.ts` 中 `render` 的 `DocumentFragment` 子节点快照与 `try / finally` 安全卸载逻辑：
+
+```ts
+export function render(view: () => Node, container: Node): Dispose {
+  return createRoot((dispose) => {
+    const node = view();
+    // DocumentFragment 插入后会被清空，必须在 appendChild 前先快照本次要挂载的全部顶层节点。
+    const mountedNodes = node instanceof DocumentFragment ? Array.from(node.childNodes) : [node];
+    container.appendChild(node);
+
+    let disposed = false;
+
+    return () => {
+      // 卸载保持幂等：先释放所有权树，并在 finally 中只移除仍直接挂在目标容器下的节点。
+      if (disposed) return;
+      disposed = true;
+
+      try {
+        dispose();
+      } finally {
+        for (const mounted of mountedNodes) {
+          if (mounted.parentNode === container) {
+            container.removeChild(mounted);
+          }
+        }
+      }
+    };
+  });
+}
+```
+
+这里的三道防线缺一不可：
+
+- **插入前快照**：`DocumentFragment` 在 `container.appendChild(node)` 后会清空，提前拍下 `Array.from(node.childNodes)` 才能记住本次挂载出去的全部顶层节点。
+- **`try / finally` 兜底移除**：即使某条 `onCleanup` 在 `dispose()` 阶段抛错，已挂载到页面的节点依然会被移走，不会滞留成孤儿 DOM。
+- **`mounted.parentNode === container` 守卫**：只移除仍直接属于目标容器的节点，既不误删容器原有兄弟，也不去动已经被外部迁走的节点。
+
+保存并启用 3 条测试后运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，60 条测试和构建全部通过。现在 `render` 已经完全准备好承接下一节返回 `DocumentFragment` 的 `<Show>`。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 6.3-learn 6.3-solution -- src
+```

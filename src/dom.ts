@@ -118,8 +118,7 @@ export function render(view: () => Node, container: Node): Dispose {
   return createRoot((dispose) => {
     const node = view();
     // DocumentFragment 插入后会被清空，必须在 appendChild 前先快照本次要挂载的全部顶层节点。
-    // TODO: 若 node instanceof DocumentFragment，取 Array.from(node.childNodes) 作为 mountedNodes，否则为 [node]。
-    const mountedNodes: Node[] = [node];
+    const mountedNodes = node instanceof DocumentFragment ? Array.from(node.childNodes) : [node];
     container.appendChild(node);
 
     let disposed = false;
@@ -129,10 +128,14 @@ export function render(view: () => Node, container: Node): Dispose {
       if (disposed) return;
       disposed = true;
 
-      // TODO: 用 try { dispose(); } finally { ... } 包裹卸载过程，并在 finally 中只移除 mounted.parentNode === container 的节点。
-      dispose();
-      for (const mounted of mountedNodes) {
-        mounted.parentNode?.removeChild(mounted);
+      try {
+        dispose();
+      } finally {
+        for (const mounted of mountedNodes) {
+          if (mounted.parentNode === container) {
+            container.removeChild(mounted);
+          }
+        }
       }
     };
   });
