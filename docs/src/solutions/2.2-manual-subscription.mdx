@@ -1,0 +1,58 @@
+`subscribe` 只负责把回调存进 `subscribers`，真正调用它们的是之后的 `set`：
+
+```ts
+/**
+ * 把值留在一次调用独有的闭包里，交给同一组读写和订阅函数访问。
+ *
+ * @param initialValue 创建时保存的初始值，也决定读写函数使用的类型。
+ * @returns getter、setter 和手动订阅函数组成的元组。
+ */
+export function createSignal<T>(initialValue: T) {
+  let value = initialValue;
+  // 保存关心这个 signal 变化的回调集合。
+  const subscribers = new Set<() => void>();
+
+  /**
+   * 读取当前闭包里保存的值。
+   *
+   * @returns 最新状态。
+   */
+  function get(): T {
+    return value;
+  }
+
+  /**
+   * 先把新值写回闭包，再通知所有已登记的订阅者。
+   *
+   * @param next 要写入的新值。
+   */
+  function set(next: T): void {
+    // 先更新值，回调里再调用 get() 才能读到这次写入的结果。
+    value = next;
+    for (const subscriber of subscribers) {
+      subscriber();
+    }
+  }
+
+  /**
+   * 手动登记一个回调，让它在这个 signal 写入新值后收到通知。
+   *
+   * @param callback 每次写入后要执行的函数。
+   */
+  function subscribe(callback: () => void): void {
+    // 用 Set 存回调，同一个函数引用重复登记时只保留一份。
+    subscribers.add(callback);
+  }
+
+  return [get, set, subscribe] as const;
+}
+```
+
+沿着 `setCount(1)` 走一遍：闭包里的 `value` 先从 `0` 变成 `1`，循环再取出登记好的回调执行，回调里的 `count()` 读到的正是刚写进去的 `1`。如果把 `value = next` 放到循环后面，回调每次读到的都会慢一拍，终端输出会变成 `0`、`1`，测试也会直接抓出 `[0, 1]` 而不是 `[1, 2]`。
+
+现在“保存值”和“写入时通知”已经接通了，但还可以想想下一步的问题：如果一个计算总价的回调同时读了 `price()` 和 `quantity()`，现在就得分别向两个 signal 各登记一次。以后表达式又加上了 `discount()`，还得记得再去补一处 `subscribe`。能不能让回调先跑一遍，由 getter 自己记下它实际读过哪些值？这就是下一节 `2.3` 要做的事。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 2.2-learn 2.2-solution -- src
+```

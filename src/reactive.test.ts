@@ -18,7 +18,7 @@ it("写入新值后 getter 返回新值", () => {
   expect(other()).toBe(10);
 });
 
-it.skip("订阅者在写入后读到更新值", () => {
+it("订阅者在写入后读到更新值", () => {
   const [count, setCount, subscribe] = createSignal(0);
   const seen: number[] = [];
 
@@ -32,7 +32,7 @@ it.skip("订阅者在写入后读到更新值", () => {
   expect(seen).toEqual([1, 2]);
 });
 
-it.skip("一次写入通知多个订阅者", () => {
+it("一次写入通知多个订阅者", () => {
   const [count, setCount, subscribe] = createSignal(0);
   const first: number[] = [];
   const second: number[] = [];
