@@ -1,0 +1,55 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "2.1 用闭包保存值"
+description: "把对同一份状态的读写交给两个函数，让写入真的改变后续读到的值。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+import ReactivityConsoleDemo from "../../components/ReactivityConsoleDemo";
+
+在 [2.0](../2.0-reactivity/) 的演示里，调用 `setCount` 后日志就会跟着更新。动手做自动通知之前，我们先解决最基础的一步：用 `createSignal` 把一份状态保存起来，让写入真的改变后面读到的值。
+
+## 交出去的是数字，还是读数字的函数？
+
+一个计数器现在是 `0`。如果你把这个数字直接交给别人，之后自己把变量改成 `1`，对方手里留着的还是当初抄走的 `0`：
+
+```ts
+let value = 0;
+const count = value; // 这里已经取走了数字 0。
+value = 1;
+console.log(count); // 0
+```
+
+把读取包进函数就不一样了：
+
+```ts
+let value = 0;
+const count = () => value; // 把读取推迟到调用时。
+value = 1;
+console.log(count()); // 1
+```
+
+第二段里 `count` 是一个函数，每次调用 `count()` 才去读当前的 `value`，所以拿到的是 `1`。到了 2.3 节，这个调用还会顺手告诉框架现在是谁在读这个值。
+
+`createSignal` 做的就是把这套写法封装起来。每次调用 `createSignal(initialValue)`，都会新建一份局部的 `value`，再返回共享这份变量的 `get` 和 `set`，这就是闭包。由于每次调用都会创建独立的作用域，两个 signal 各自持有自己的 `value`，互不干扰。
+
+> [!NOTE]
+> 返回值写成 `return [get, set] as const`，TypeScript 才会把它当成固定两项的元组（第一项是读函数，第二项是写函数），而不是普通数组。从这节起 `src/main.ts` 会直接 `import { createSignal } from "./reactive.ts"`，根目录的 `tsconfig.json` 已开启 `rewriteRelativeImportExtensions`，既能让 Node 24 直接跑 `.ts`，也能让 `pnpm build` 把产物里的后缀改回 `.js`。
+
+## 预期效果
+
+试着点下面的按钮：先点 `调用 setCount(1)`，再点 `调用 console.log(count())`。点完 `setCount(1)` 时 Console 没有任何动静，要手动调用一次 `console.log(count())` 才会打印出 `1`。
+
+<ReactivityConsoleDemo mode="signal" label="2.1 预期效果：写入后通过 getter 读到新值" client:load />
+
+这一节和整章结束时一样，最后都会在终端打出 `0`、`1`、`2`，但代码里的差别很明显：现在每次写完都必须自己调用 `console.log(count())` 才看得到变化，到 2.3 节就只剩 `setCount` 了。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/2.1 2.1-learn
+> ```
+>
+> 起手运行 `pnpm dev` 会打印三次 `0`。补齐 `src/reactive.ts` 的状态写入逻辑，让 `pnpm dev` 依次打印 `0`、`1`、`2`，并保证 `pnpm format && pnpm check && pnpm test:run` 全部通过。
+
+<LessonSolution slug="2.1-signal" tag="2.1-solution" />

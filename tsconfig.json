@@ -2,6 +2,8 @@
   "compilerOptions": {
     // 使用 Node 的 ESM 解析规则和类型，配合 package.json 的 type: module。
     "module": "nodenext",
+    // Node 直接运行 .ts 源码，tsc 构建时再把相对导入后缀改写为 .js。
+    "rewriteRelativeImportExtensions": true,
     "target": "esnext",
     "types": ["node"],
 

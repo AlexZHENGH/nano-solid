@@ -124,6 +124,14 @@ th {
 .course-intro > ul {
   padding-inline-start: 1.45rem;
 }
+/* 章标题紧跟课程目录，点击标题就能打开对应页面。 */
+.course-chapter {
+  margin-block: 0.75rem 0.25rem;
+}
+.course-lessons {
+  margin: 0 0 0.75rem;
+  padding-inline-start: 1.35rem;
+}
 /* 侧注提示框：用左竖线和淡底色把补充知识从主线步骤里视觉区分开。 */
 .callout {
   --callout-accent: #23634c;

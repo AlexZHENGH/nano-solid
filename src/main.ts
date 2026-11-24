@@ -1,2 +1,10 @@
-// 把问候语写到标准输出，方便从终端和测试里观察。
-console.log("Building my own nano-solid!");
+// 运行入口用来观察当前小节的终端输出。
+import { createSignal } from "./reactive.ts";
+
+const [count, setCount] = createSignal(0);
+
+console.log(count());
+setCount(1);
+console.log(count());
+setCount(2);
+console.log(count());
