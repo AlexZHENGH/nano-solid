@@ -54,3 +54,39 @@ export function createReactiveText(getValue: () => string): Renderable<Text> {
 
   return { node, dispose };
 }
+
+/**
+ * 把静态文本包装成统一的 Renderable，便于与响应式节点一起传入父元素。
+ *
+ * @param value 不会随状态变化的静态文本内容。
+ * @returns 带空释放函数的 Text Renderable。
+ */
+export function createStaticText(value: string): Renderable<Text> {
+  const node = createText(value);
+  return { node, dispose: () => {} };
+}
+
+/**
+ * 创建指定标签的 HTML 元素，挂载全部子 Renderable，并返回能递归释放整棵子树的 Renderable。
+ *
+ * @param tag HTML 标签名。
+ * @param children 需要挂载到当前元素下的子节点列表。
+ * @returns 包含当前元素节点与级联释放函数的 Renderable。
+ */
+export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  children: Renderable<Node>[] = [],
+): Renderable<HTMLElementTagNameMap[K]> {
+  const node = createElement(tag);
+
+  // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
+  // TODO: 遍历 children，调用 mount(node, child.node) 挂载全部子节点。
+
+  function dispose(): void {
+    // 释放父节点时把清理沿着树传给所有子节点，确保深层响应式文本也会退订。
+    // TODO: 遍历 children，逐个调用 child.dispose()。
+  }
+
+  return { node, dispose };
+}

@@ -13,6 +13,7 @@ import { frontmatter as throwCleanup } from "./lessons/3.4-throw-cleanup.mdx";
 import { frontmatter as domRenderer } from "./lessons/4.0-dom-renderer.mdx";
 import { frontmatter as browserVite } from "./lessons/4.1-browser-vite.mdx";
 import { frontmatter as reactiveText } from "./lessons/4.2-reactive-text.mdx";
+import { frontmatter as renderableTree } from "./lessons/4.3-renderable-tree.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -30,6 +31,7 @@ const throwCleanupUrl = `${baseUrl}/lessons/3.4-throw-cleanup/`;
 const domRendererUrl = `${baseUrl}/lessons/4.0-dom-renderer/`;
 const browserViteUrl = `${baseUrl}/lessons/4.1-browser-vite/`;
 const reactiveTextUrl = `${baseUrl}/lessons/4.2-reactive-text/`;
+const renderableTreeUrl = `${baseUrl}/lessons/4.3-renderable-tree/`;
 ---
 
 <BookLayout
@@ -88,5 +90,6 @@ const reactiveTextUrl = `${baseUrl}/lessons/4.2-reactive-text/`;
   <ul class="course-lessons">
     <li><a href={browserViteUrl}>{browserVite.title}</a></li>
     <li><a href={reactiveTextUrl}>{reactiveText.title}</a></li>
+    <li><a href={renderableTreeUrl}>{renderableTree.title}</a></li>
   </ul>
 </BookLayout>
