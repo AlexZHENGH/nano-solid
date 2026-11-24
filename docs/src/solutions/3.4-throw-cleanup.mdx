@@ -1,0 +1,31 @@
+在 `runEffect(effect)` 的 `try` 和 `finally` 之间补上 `catch (error)`，直接复用 [3.3](../3.3-dispose/) 的 `disposeEffect(effect)` 清理半截订阅，再把原异常继续向外抛出：
+
+```ts
+function runEffect(effect: Effect): void {
+  // 同一轮通知快照里，前面的 effect 可能已经释放了当前节点，进入前必须先跳过。
+  if (effect.disposed) return;
+  cleanupDependencies(effect);
+  // 保存外层 effect，并在 try/finally 中恢复；若回调抛错，则在 catch 中释放半截订阅后继续抛出。
+  const previous = currentEffect;
+  currentEffect = effect;
+  try {
+    effect.callback();
+  } catch (error) {
+    disposeEffect(effect);
+    throw error;
+  } finally {
+    currentEffect = previous;
+  }
+}
+```
+
+无论是首次执行还是后续重跑，只要回调在读完部分 signal 后抛错，都会立刻断开这些半截订阅并把 `disposed` 置为 `true`，同时原样抛出错误且在 `finally` 里恢复外层 `currentEffect`。
+
+保存后运行 `pnpm dev` 会打印 `effect run: 0`、`caught: boom`、`setCount(1) ok`，运行 `pnpm format && pnpm check && pnpm test:run` 18 条测试全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 3.4-learn 3.4-solution -- src
+```
+
+到这里，第三章全部结束。我们的响应式内核已经具备了同值跳过、动态依赖重建、幂等释放和抛错清理这四项关键保障，接下来就可以放心地把它接到浏览器 DOM 渲染上了。

@@ -55,7 +55,9 @@ function runEffect(effect: Effect): void {
   currentEffect = effect;
   try {
     effect.callback();
-    // TODO: 补充 catch (error) 分支，先调用 disposeEffect(effect) 再重新抛出 error。
+  } catch (error) {
+    disposeEffect(effect);
+    throw error;
   } finally {
     currentEffect = previous;
   }

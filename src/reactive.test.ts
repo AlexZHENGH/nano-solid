@@ -242,7 +242,7 @@ it("effect 在回调中释放自己后不再响应后续写入", () => {
   expect(runs).toBe(2);
 });
 
-it.skip("首次执行读值后抛错会清理半截订阅并继续抛出异常", () => {
+it("首次执行读值后抛错会清理半截订阅并继续抛出异常", () => {
   const [count, setCount] = createSignal(0);
   let runs = 0;
 
@@ -261,7 +261,7 @@ it.skip("首次执行读值后抛错会清理半截订阅并继续抛出异常",
   expect(runs).toBe(1);
 });
 
-it.skip("重跑中途读值后抛错会释放该 effect 且不再响应后续写入", () => {
+it("重跑中途读值后抛错会释放该 effect 且不再响应后续写入", () => {
   const [count, setCount] = createSignal(0);
   let runs = 0;
 
@@ -281,7 +281,7 @@ it.skip("重跑中途读值后抛错会释放该 effect 且不再响应后续写
   expect(runs).toBe(2);
 });
 
-it.skip("内层 effect 抛错释放自己时不会影响外层 effect 继续追踪", () => {
+it("内层 effect 抛错释放自己时不会影响外层 effect 继续追踪", () => {
   const [inner, setInner] = createSignal(0);
   const [outer, setOuter] = createSignal(0);
   let innerRuns = 0;
