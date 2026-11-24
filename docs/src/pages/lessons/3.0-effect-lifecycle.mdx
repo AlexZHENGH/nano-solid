@@ -1,0 +1,32 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "3. 响应式边界与生命周期"
+description: "跳过相同值写入、重建动态依赖、释放不再需要的 effect，并清理抛错留下的订阅。"
+---
+
+import EffectLifecycleDemo from "../../components/EffectLifecycleDemo";
+
+[上一章](../2.0-reactivity/)我们用不到 50 行代码做出了最小版本的 `createSignal` 和 `createEffect`。它能跑通最基本的计数日志，但在真实使用中很快会撞上四类边界：把相同的值写回去会白跑一遍，条件分支切换后旧分支还会误触发，不再需要的 effect 没法停下来，以及回调读到一半抛错后会把半截订阅留在 signal 上。
+
+按顺序试着点一遍下面的按钮：先点一次 `同值 setLeft(0)`，再点 `setIsLeft(false)` 切到 `right` 分支，接着试着点 `setLeft(1)` 看旧分支是否还会触发，再点 `setRight(11)`，最后点 `dispose()` 并继续写入。观察代码和 Console 的变化：
+
+<EffectLifecycleDemo
+  mode="overview"
+  codeHeight="16rem"
+  label="第三章预期效果：同值跳过、动态依赖与释放"
+  client:load
+/>
+
+你会看到四个清晰的行为：
+
+1. 写回原值 `setLeft(0)` 时，Console 不会多出日志。
+2. 点 `setIsLeft(false)` 会打印 `10`，但紧接着点 `setLeft(1)` 不会再触发日志。
+3. 改动正在读取的 `setRight(11)`，Console 会立刻打印 `11`。
+4. 调用 `dispose()` 后再改动 `right`，signal 的值照常更新，但这个 effect 已经彻底停了下来。
+
+这一章分四小节逐一攻克这些边界，顺手再补上“读完 signal 就抛错”时的自动清理：
+
+- **3.1 跳过相同值写入**：用 `Object.is` 拦截无变化写入，正确处理 `NaN` 和 `+0 / -0`。
+- **3.2 动态依赖重建**：给 effect 加上反向依赖记录，每次重跑前清理旧订阅，按本轮实际读取重建。
+- **3.3 释放不再需要的 effect**：让 `createEffect` 返回幂等的释放句柄，跳过已排队或已释放的执行。
+- **3.4 清理抛错留下的订阅**：首次执行或重跑中途抛错时自动释放半截订阅，并原样保留异常。

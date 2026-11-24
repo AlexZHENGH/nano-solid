@@ -5,6 +5,7 @@ import { frontmatter as reactivity } from "./lessons/2.0-reactivity.mdx";
 import { frontmatter as signal } from "./lessons/2.1-signal.mdx";
 import { frontmatter as manualSubscription } from "./lessons/2.2-manual-subscription.mdx";
 import { frontmatter as trackEffects } from "./lessons/2.3-track-effects.mdx";
+import { frontmatter as effectLifecycle } from "./lessons/3.0-effect-lifecycle.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -14,6 +15,7 @@ const reactivityUrl = `${baseUrl}/lessons/2.0-reactivity/`;
 const signalUrl = `${baseUrl}/lessons/2.1-signal/`;
 const manualSubscriptionUrl = `${baseUrl}/lessons/2.2-manual-subscription/`;
 const trackEffectsUrl = `${baseUrl}/lessons/2.3-track-effects/`;
+const effectLifecycleUrl = `${baseUrl}/lessons/3.0-effect-lifecycle/`;
 ---
 
 <BookLayout
@@ -61,4 +63,5 @@ const trackEffectsUrl = `${baseUrl}/lessons/2.3-track-effects/`;
     <li><a href={manualSubscriptionUrl}>{manualSubscription.title}</a></li>
     <li><a href={trackEffectsUrl}>{trackEffects.title}</a></li>
   </ul>
+  <h3 class="course-chapter"><a href={effectLifecycleUrl}>{effectLifecycle.title}</a></h3>
 </BookLayout>

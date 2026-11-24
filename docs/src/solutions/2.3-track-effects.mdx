@@ -42,7 +42,7 @@ function get(): T {
 
 沿着执行过程走一遍：`createEffect` 首次跑回调时，`currentEffect` 指向回调本身，`count()` 返回 `0` 并把回调加入 `subscribers`，退出时 `finally` 把 `currentEffect` 恢复为 `undefined`。接着 `setCount(1)` 先更新 `value`，再通过 `runEffect` 重跑回调并打印 `1`。`setCount(2)` 重复同样的过程，终端依次输出 `0`、`1`、`2`。因为 `subscribers` 是 `Set`，重跑时再次登记同一个函数引用仍只会保留一份。
 
-到这里，我们已经用不到 50 行代码做出了一个能跑通的最小响应式系统。但在收尾前，不妨想一个稍微复杂点的场景：如果 effect 里写的是条件分支 `isLeft() ? left() : right()`，最初 `isLeft()` 为 `true`，随后切成了 `false` 去读 `right()`。此时 `left` 的 `subscribers` 里还留着这个 effect。再改一次 `left`，日志就会把右边的值又多打印一遍。下一章我们就来解决这类真实边界：跳过同值写入、让 effect 忘掉这轮没读到的旧依赖，以及如何停止一个不再需要的 effect。
+到这里，我们已经用不到 50 行代码做出了一个能跑通的最小响应式系统。但在收尾前，不妨想一个稍微复杂点的场景：如果 effect 里写的是条件分支 `isLeft() ? left() : right()`，最初 `isLeft()` 为 `true`，随后切成了 `false` 去读 `right()`。此时 `left` 的 `subscribers` 里还留着这个 effect。再改一次 `left`，日志就会把右边的值又多打印一遍。[下一章](../3.0-effect-lifecycle/)我们就来解决这类真实边界：跳过同值写入、让 effect 忘掉这轮没读到的旧依赖，以及如何停止一个不再需要的 effect。
 
 ```sh
 # 查看 src 目录下从题目到解答的全部改动。
