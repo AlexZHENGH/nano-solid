@@ -15,7 +15,7 @@ function createCounterFixture(): HTMLDivElement {
   return root;
 }
 
-it.skip("点击加减与重置按钮会通过 signal 和 effect 更新显示", () => {
+it("点击加减与重置按钮会通过 signal 和 effect 更新显示", () => {
   const root = createCounterFixture();
   const dispose = mountCounter(root);
 
@@ -39,7 +39,7 @@ it.skip("点击加减与重置按钮会通过 signal 和 effect 更新显示", (
   dispose();
 });
 
-it.skip("调用返回的清理函数后，再点击按钮不再更新页面", () => {
+it("调用返回的清理函数后，再点击按钮不再更新页面", () => {
   const root = createCounterFixture();
   const dispose = mountCounter(root);
 

@@ -1,0 +1,36 @@
+为三个按钮分别声明具名处理函数，在挂载时用 `addEventListener` 绑定，在清理函数里用 `removeEventListener` 成对移除：
+
+```ts
+const [count, setCount] = createSignal(0);
+
+// 把当前计数同步到页面上的 #counter 文本，保证信号变化时自动刷新显示。
+const disposeEffect = createEffect(() => {
+  counter.textContent = String(count());
+});
+
+// 点击 +1、-1、重置按钮时更新 signal，由上面的 effect 驱动 DOM 更新。
+const handleIncrement = () => setCount(count() + 1);
+const handleDecrement = () => setCount(count() - 1);
+const handleReset = () => setCount(0);
+
+incrementButton.addEventListener("click", handleIncrement);
+decrementButton.addEventListener("click", handleDecrement);
+resetButton.addEventListener("click", handleReset);
+
+return () => {
+  disposeEffect();
+  // 卸载时成对移除事件监听，避免节点移除或重复挂载后泄漏监听函数。
+  incrementButton.removeEventListener("click", handleIncrement);
+  decrementButton.removeEventListener("click", handleDecrement);
+  resetButton.removeEventListener("click", handleReset);
+};
+```
+
+这里之所以把三个箭头函数先存进变量，是因为 `removeEventListener` 需要传入与 `addEventListener` 完全相同的函数引用。按钮点击本身不直接操作 DOM，只更新 `count` 信号，由 `createEffect` 统一负责刷新 `#counter.textContent`。
+
+保存后打开 `pnpm dev` 点击三个按钮可以看到数字实时变化，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build` 20 条测试和构建全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 4.1-learn 4.1-solution -- src
+```
