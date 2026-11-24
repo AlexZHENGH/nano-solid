@@ -23,6 +23,7 @@ import { frontmatter as components } from "./lessons/5.4-components.mdx";
 import { frontmatter as ownershipShow } from "./lessons/6.0-ownership-and-show.mdx";
 import { frontmatter as nestedEffects } from "./lessons/6.1-nested-effects.mdx";
 import { frontmatter as rootCleanup } from "./lessons/6.2-root-and-cleanup.mdx";
+import { frontmatter as nativeNodesRender } from "./lessons/6.3-native-nodes-render.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -50,6 +51,7 @@ const componentsUrl = `${baseUrl}/lessons/5.4-components/`;
 const ownershipShowUrl = `${baseUrl}/lessons/6.0-ownership-and-show/`;
 const nestedEffectsUrl = `${baseUrl}/lessons/6.1-nested-effects/`;
 const rootCleanupUrl = `${baseUrl}/lessons/6.2-root-and-cleanup/`;
+const nativeNodesRenderUrl = `${baseUrl}/lessons/6.3-native-nodes-render/`;
 ---
 
 <BookLayout
@@ -122,5 +124,6 @@ const rootCleanupUrl = `${baseUrl}/lessons/6.2-root-and-cleanup/`;
   <ul class="course-lessons">
     <li><a href={nestedEffectsUrl}>{nestedEffects.title}</a></li>
     <li><a href={rootCleanupUrl}>{rootCleanup.title}</a></li>
+    <li><a href={nativeNodesRenderUrl}>{nativeNodesRender.title}</a></li>
   </ul>
 </BookLayout>

@@ -1,10 +1,4 @@
-import { createEffect, type Dispose } from "./reactive.ts";
-
-/** 可挂载到 DOM 且自带清理逻辑的渲染单元。 */
-export type Renderable<T extends Node = Node> = {
-  node: T;
-  dispose: Dispose;
-};
+import { createEffect, createRoot, onCleanup, type Dispose } from "./reactive.ts";
 
 /** 原生 HTML 元素支持的静态/响应式属性与点击事件。 */
 export type ElementProps = {
@@ -16,179 +10,130 @@ export type ElementProps = {
 };
 
 /**
- * 创建指定标签名的 HTML 元素，并保留对应的 DOM 元素类型。
+ * 创建一个原生静态文本节点。
  *
- * @param tag HTML 标签名。
- * @returns 对应的 HTML 元素节点。
- */
-export function createElement<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-): HTMLElementTagNameMap[K] {
-  return document.createElement(tag);
-}
-
-/**
- * 创建一个原生文本节点。
- *
- * @param value 初始文本内容。
- * @returns 新建的 Text 节点。
+ * @param value 文本内容。
+ * @returns 新建的原生 Text 节点。
  */
 export function createText(value: string): Text {
   return document.createTextNode(value);
 }
 
 /**
- * 将子节点追加挂载到父节点末尾。
- *
- * @param parent 父容器节点。
- * @param child 待挂载的子节点。
- */
-export function mount(parent: Node, child: Node): void {
-  parent.appendChild(child);
-}
-
-/**
- * 创建一个会随内部读取的 signal 自动原地更新的文本节点，并返回对应的释放函数。
+ * 创建一个会随内部读取的 signal 自动原地更新的原生文本节点，其订阅自动归属当前活跃的 Owner。
  *
  * @param getValue 读取响应式状态并返回当前文本内容的 getter。
- * @returns 包含同一个 Text 节点引用与释放函数的 Renderable。
+ * @returns 会在状态变化时原地更新 .data 的原生 Text 节点。
  */
-export function createReactiveText(getValue: () => string): Renderable<Text> {
+export function createReactiveText(getValue: () => string): Text {
   const node = createText("");
 
-  // 用 createEffect 追踪 getValue() 中读取的 signal，变化时原地更新同一个 Text 节点的 .data。
-  const dispose = createEffect(() => {
+  // createEffect 自动挂入当前 Owner，作用域释放时随所有权树一起退订。
+  createEffect(() => {
     node.data = getValue();
   });
 
-  return { node, dispose };
+  return node;
 }
 
 /**
- * 把静态文本包装成统一的 Renderable，便于与响应式节点一起传入父元素。
- *
- * @param value 不会随状态变化的静态文本内容。
- * @returns 带空释放函数的 Text Renderable。
- */
-export function createStaticText(value: string): Renderable<Text> {
-  const node = createText(value);
-  return { node, dispose: () => {} };
-}
-
-/**
- * 统一绑定静态或响应式属性：静态值立即写入，函数 getter 交给 createEffect 追踪并返回释放句柄。
+ * 统一绑定静态或响应式属性：静态值立即写入，函数 getter 交给 createEffect 追踪并自动归属当前 Owner。
  *
  * @param value 静态属性值或读取响应式状态的 getter。
  * @param apply 将最新值写入真实 DOM 属性的函数。
- * @returns 停止该属性订阅的释放函数（静态值返回空函数）。
  */
-function bindProperty<T>(value: T | (() => T), apply: (next: T) => void): Dispose {
-  // 函数形态表示响应式属性，需要用 createEffect 追踪并在值变化时重新 apply；静态值直接写入一次即可。
+function bindProperty<T>(value: T | (() => T), apply: (next: T) => void): void {
+  // 函数形态交给 createEffect 追踪并由当前 Owner 管理释放；静态值直接写入一次即可。
   if (typeof value === "function") {
     const getter = value as () => T;
-    return createEffect(() => apply(getter()));
+    createEffect(() => apply(getter()));
+    return;
   }
 
   apply(value);
-  return () => {};
 }
 
 /**
- * 创建指定标签的 HTML 元素，应用静态/响应式属性与事件监听、挂载全部子节点，并在构造失败时回滚已建立的资源。
+ * 创建指定标签的原生 HTML 元素，应用静态/响应式属性与事件监听并挂载全部子节点；清理逻辑统一交给当前 Owner。
  *
  * @param tag HTML 标签名。
  * @param props 元素的静态/响应式属性与事件回调。
- * @param children 需要挂载到当前元素下的子节点列表。
- * @returns 包含当前元素节点与幂等级联释放函数的 Renderable。
+ * @param children 需要挂载到当前元素下的原生 DOM 子节点列表。
+ * @returns 对应的原生 HTML 元素节点。
  */
-export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
+export function createElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props: ElementProps = {},
-  children: Renderable[] = [],
-): Renderable<HTMLElementTagNameMap[K]> {
-  const node = createElement(tag);
+  children: Node[] = [],
+): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
   // 宽化为 HTMLElement，使 addEventListener("click", ...) 命中 MouseEvent 重载。
   const element: HTMLElement = node;
-  const disposers: Dispose[] = [];
-  let disposed = false;
 
-  function dispose(): void {
-    // 幂等守卫：构造失败回滚或外部重复释放时只执行一次清理。
-    if (disposed) return;
-    disposed = true;
-
-    // 释放元素时先移除事件监听、停止所有属性 effect，再沿树递归释放全部子节点。
-    if (props.onClick) {
-      element.removeEventListener("click", props.onClick);
+  if (props.id !== undefined) {
+    element.id = props.id;
+  }
+  if (props.type !== undefined) {
+    element.setAttribute("type", props.type);
+  }
+  if (props.class !== undefined) {
+    bindProperty(props.class, (value) => {
+      element.className = value;
+    });
+  }
+  if (props.onClick) {
+    const handleClick = props.onClick;
+    element.addEventListener("click", handleClick);
+    // 用 onCleanup 成对登记事件解绑，所属 Owner 释放或构造中途抛错回滚时自动移除监听。
+    onCleanup(() => {
+      element.removeEventListener("click", handleClick);
+    });
+  }
+  if (props.disabled !== undefined) {
+    // 仅按钮元素支持 disabled 属性，对非按钮标签提前显式报错，按钮则通过 bindProperty 写入 element.disabled。
+    if (!(element instanceof HTMLButtonElement)) {
+      throw new Error(`The "disabled" prop is not supported on <${tag}>`);
     }
-    for (const disposer of disposers) {
-      disposer();
-    }
-    for (const child of children) {
-      child.dispose();
-    }
+    bindProperty(props.disabled, (value) => {
+      element.disabled = value;
+    });
   }
 
-  // 构造中途若属性校验失败或响应式 getter 抛错，必须调用 dispose() 回滚已建立的订阅、监听与 children，再重新抛出异常。
-  try {
-    if (props.id !== undefined) {
-      element.id = props.id;
-    }
-    if (props.type !== undefined) {
-      element.setAttribute("type", props.type);
-    }
-    if (props.class !== undefined) {
-      disposers.push(
-        bindProperty(props.class, (value) => {
-          element.className = value;
-        }),
-      );
-    }
-    if (props.onClick) {
-      element.addEventListener("click", props.onClick);
-    }
-    if (props.disabled !== undefined) {
-      // 仅按钮元素支持 disabled 属性，对非按钮标签提前显式报错，按钮则通过 bindProperty 写入 element.disabled。
-      if (!(element instanceof HTMLButtonElement)) {
-        throw new Error(`The "disabled" prop is not supported on <${tag}>`);
-      }
-      disposers.push(
-        bindProperty(props.disabled, (value) => {
-          element.disabled = value;
-        }),
-      );
-    }
-
-    // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
-    for (const child of children) {
-      mount(element, child.node);
-    }
-
-    return { node, dispose };
-  } catch (error) {
-    dispose();
-    throw error;
+  // 依次把每个子 Node 挂进当前元素；所有子节点的订阅清理已由所有权树统一接管。
+  for (const child of children) {
+    element.appendChild(child);
   }
+
+  return node;
 }
 
 /**
- * 将一个 Renderable 挂载到指定容器，并返回幂等的卸载函数：卸载时同时释放子树订阅并移除 DOM 节点。
+ * 在独立的 createRoot 中延迟求值视图并挂载到目标容器，返回幂等的卸载函数：卸载时释放整棵所有权树并安全移除本次挂载的节点。
  *
- * @param renderable 待挂载的根 Renderable 节点。
+ * @param view 延迟创建根节点的工厂函数，确保整棵子树的副作用与清理回调都登记在本次根作用域内。
  * @param container 挂载目标容器节点。
- * @returns 调用后释放全部订阅并把根节点从容器移除的卸载函数。
+ * @returns 调用后释放全部订阅、清理回调并移除挂载节点的幂等卸载函数。
  */
-export function render(renderable: Renderable<Node>, container: Node): Dispose {
-  mount(container, renderable.node);
+export function render(view: () => Node, container: Node): Dispose {
+  return createRoot((dispose) => {
+    const node = view();
+    // DocumentFragment 插入后会被清空，必须在 appendChild 前先快照本次要挂载的全部顶层节点。
+    // TODO: 若 node instanceof DocumentFragment，取 Array.from(node.childNodes) 作为 mountedNodes，否则为 [node]。
+    const mountedNodes: Node[] = [node];
+    container.appendChild(node);
 
-  let disposed = false;
+    let disposed = false;
 
-  return () => {
-    // 卸载函数必须幂等，先释放整棵树的响应式订阅与事件监听，再只把本次挂载的根节点从父节点移除。
-    if (disposed) return;
-    disposed = true;
+    return () => {
+      // 卸载保持幂等：先释放所有权树，并在 finally 中只移除仍直接挂在目标容器下的节点。
+      if (disposed) return;
+      disposed = true;
 
-    renderable.dispose();
-    renderable.node.parentNode?.removeChild(renderable.node);
-  };
+      // TODO: 用 try { dispose(); } finally { ... } 包裹卸载过程，并在 finally 中只移除 mounted.parentNode === container 的节点。
+      dispose();
+      for (const mounted of mountedNodes) {
+        mounted.parentNode?.removeChild(mounted);
+      }
+    };
+  });
 }

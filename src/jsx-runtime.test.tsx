@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from "vitest";
-import { render, type Renderable } from "./dom.ts";
+import { render } from "./dom.ts";
 import { jsx, type JSXChild } from "./jsx-runtime.ts";
-import { createSignal } from "./reactive.ts";
+import { createEffect, createSignal, onCleanup } from "./reactive.ts";
 
 describe("JSX 运行时与子节点归一化", () => {
   it("将原生 JSX 元素与嵌套静态子节点转为真实 DOM", () => {
@@ -14,9 +14,9 @@ describe("JSX 运行时与子节点归一化", () => {
       </div>
     );
 
-    expect(view.node.nodeName).toBe("DIV");
-    expect(view.node.childNodes.length).toBe(2);
-    expect(view.node.textContent).toBe("Hellonano-solid");
+    expect(view.nodeName).toBe("DIV");
+    expect(view.childNodes.length).toBe(2);
+    expect(view.textContent).toBe("Hellonano-solid");
   });
 
   it("保留数字 0 为文本，同时忽略 boolean、null 与 undefined", () => {
@@ -32,13 +32,13 @@ describe("JSX 运行时与子节点归一化", () => {
     );
 
     // 0 不能被误判为假值丢弃，而 boolean 和空值不应渲染出 "false" / "null"。
-    expect(view.node.textContent).toBe("042");
+    expect(view.textContent).toBe("042");
   });
 
   it("递归展平嵌套数组子节点并按原顺序挂载", () => {
     const view = <p>{["A", ["B", [0, "C", false, null]]]}</p>;
 
-    expect(view.node.textContent).toBe("AB0C");
+    expect(view.textContent).toBe("AB0C");
   });
 
   it("将函数子节点转为响应式文本，并在卸载后停止更新", () => {
@@ -46,8 +46,7 @@ describe("JSX 运行时与子节点归一化", () => {
     const [count, setCount] = createSignal(0);
     const readCount = vi.fn(() => count());
 
-    const view = <p>Count: {readCount}</p>;
-    const unmount = render(view, container);
+    const unmount = render(() => <p>Count: {readCount}</p>, container);
 
     expect(container.textContent).toBe("Count: 0");
 
@@ -68,13 +67,12 @@ describe("JSX 运行时与子节点归一化", () => {
 
 describe("静态属性与事件绑定", () => {
   it("将静态 id、type 与 class 属性写入真实 DOM 元素", () => {
-    const view = (
+    const button = (
       <button id="submit-btn" type="button" class="ns-btn">
         提交
       </button>
-    );
+    ) as HTMLButtonElement;
 
-    const button = view.node as HTMLButtonElement;
     expect(button.id).toBe("submit-btn");
     expect(button.type).toBe("button");
     expect(button.className).toBe("ns-btn");
@@ -85,16 +83,17 @@ describe("静态属性与事件绑定", () => {
     const container = document.createElement("div");
     const [count, setCount] = createSignal(0);
 
-    const view = (
-      <div>
-        <span id="value">{() => count()}</span>
-        <button id="inc" type="button" onClick={() => setCount(count() + 1)}>
-          +1
-        </button>
-      </div>
+    const unmount = render(
+      () => (
+        <div>
+          <span id="value">{() => count()}</span>
+          <button id="inc" type="button" onClick={() => setCount(count() + 1)}>
+            +1
+          </button>
+        </div>
+      ),
+      container,
     );
-
-    const unmount = render(view, container);
     const value = container.querySelector<HTMLSpanElement>("#value")!;
     const button = container.querySelector<HTMLButtonElement>("#inc")!;
 
@@ -109,20 +108,22 @@ describe("静态属性与事件绑定", () => {
   it("卸载后成对移除 onClick 监听，不再触发点击回调", () => {
     const container = document.createElement("div");
     const handleClick = vi.fn();
+    let button!: HTMLButtonElement;
 
-    const view = (
-      <button type="button" onClick={handleClick}>
-        点我
-      </button>
-    );
-    const button = view.node as HTMLButtonElement;
-    const unmount = render(view, container);
+    const unmount = render(() => {
+      button = (
+        <button type="button" onClick={handleClick}>
+          点我
+        </button>
+      ) as HTMLButtonElement;
+      return button;
+    }, container);
 
     button.click();
     expect(handleClick).toHaveBeenCalledTimes(1);
 
     unmount();
-    // 即使保留了按钮引用并在卸载后触发点击，监听也已成对移除。
+    // 即使保留了按钮引用并在卸载后触发点击，监听也已通过 onCleanup 成对移除。
     button.click();
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
@@ -133,10 +134,12 @@ describe("响应式属性与构造失败回滚", () => {
     const container = document.createElement("div");
     const [active, setActive] = createSignal(false);
     const readClass = vi.fn(() => (active() ? "ns-badge" : "ns-badge ns-badge-muted"));
+    let span!: HTMLSpanElement;
 
-    const view = <span class={readClass}>状态</span>;
-    const span = view.node as HTMLSpanElement;
-    const unmount = render(view, container);
+    const unmount = render(() => {
+      span = (<span class={readClass}>状态</span>) as HTMLSpanElement;
+      return span;
+    }, container);
 
     expect(span.className).toBe("ns-badge ns-badge-muted");
     expect(readClass).toHaveBeenCalledTimes(1);
@@ -161,16 +164,18 @@ describe("响应式属性与构造失败回滚", () => {
       <button type="button" disabled={true}>
         静态禁用
       </button>
-    );
-    expect((staticBtn.node as HTMLButtonElement).disabled).toBe(true);
+    ) as HTMLButtonElement;
+    expect(staticBtn.disabled).toBe(true);
 
-    const view = (
-      <button type="button" disabled={() => locked()} onClick={handleClick}>
-        提交
-      </button>
-    );
-    const button = view.node as HTMLButtonElement;
-    const unmount = render(view, container);
+    let button!: HTMLButtonElement;
+    const unmount = render(() => {
+      button = (
+        <button type="button" disabled={() => locked()} onClick={handleClick}>
+          提交
+        </button>
+      ) as HTMLButtonElement;
+      return button;
+    }, container);
 
     expect(button.disabled).toBe(true);
     button.click();
@@ -191,20 +196,27 @@ describe("响应式属性与构造失败回滚", () => {
     expect(() => <div disabled={true}>内容</div>).toThrow(/disabled.*div/);
   });
 
-  it("元素构造中途抛错时回滚已建立的属性订阅与子节点订阅", () => {
+  it("元素构造中途抛错时由 createRoot 回滚已建立的属性订阅与子节点订阅", () => {
+    const container = document.createElement("div");
     const [cls, setCls] = createSignal("a");
     const [label, setLabel] = createSignal("init");
     const readClass = vi.fn(() => cls());
     const readLabel = vi.fn(() => label());
 
-    expect(() => (
-      <div class={readClass} disabled={true}>
-        {readLabel}
-      </div>
-    )).toThrow(/disabled/);
+    expect(() =>
+      render(
+        () => (
+          <div class={readClass} disabled={true}>
+            {readLabel}
+          </div>
+        ),
+        container,
+      ),
+    ).toThrow(/disabled/);
 
     expect(readClass).toHaveBeenCalledTimes(1);
     expect(readLabel).toHaveBeenCalledTimes(1);
+    expect(container.childNodes.length).toBe(0);
 
     // 构造失败后必须已经回滚清理，后续改 signal 不应再唤醒任何半截订阅。
     setCls("b");
@@ -214,24 +226,72 @@ describe("响应式属性与构造失败回滚", () => {
   });
 
   it("响应式属性 getter 首次求值抛错时同样回滚并原样重抛", () => {
+    const container = document.createElement("div");
     const [cls, setCls] = createSignal("a");
     const readClass = vi.fn(() => cls());
 
-    expect(() => (
-      <button
-        type="button"
-        class={readClass}
-        disabled={() => {
-          throw new Error("bad disabled");
-        }}
-      >
-        提交
-      </button>
-    )).toThrow("bad disabled");
+    expect(() =>
+      render(
+        () => (
+          <button
+            type="button"
+            class={readClass}
+            disabled={() => {
+              throw new Error("bad disabled");
+            }}
+          >
+            提交
+          </button>
+        ),
+        container,
+      ),
+    ).toThrow("bad disabled");
 
     expect(readClass).toHaveBeenCalledTimes(1);
     setCls("b");
     expect(readClass).toHaveBeenCalledTimes(1);
+  });
+
+  it("兄弟节点中后一个节点抛错时，render 的根作用域会自动回滚前一个兄弟的订阅与监听", () => {
+    const container = document.createElement("div");
+    const [label, setLabel] = createSignal("init");
+    const readLabel = vi.fn(() => label());
+    const handleClick = vi.fn();
+    let firstButton!: HTMLButtonElement;
+
+    function FirstSibling(): Node {
+      firstButton = (
+        <button type="button" onClick={handleClick}>
+          {readLabel}
+        </button>
+      ) as HTMLButtonElement;
+      return firstButton;
+    }
+
+    function BrokenSibling(): Node {
+      throw new Error("second sibling boom");
+    }
+
+    // BrokenSibling 抛错时父元素 <div> 尚未进入 createElement，必须靠 render 的 createRoot 清理 FirstSibling。
+    expect(() =>
+      render(
+        () => (
+          <div>
+            <FirstSibling />
+            <BrokenSibling />
+          </div>
+        ),
+        container,
+      ),
+    ).toThrow("second sibling boom");
+
+    expect(readLabel).toHaveBeenCalledTimes(1);
+    expect(container.childNodes.length).toBe(0);
+
+    setLabel("next");
+    firstButton.click();
+    expect(readLabel).toHaveBeenCalledTimes(1);
+    expect(handleClick).toHaveBeenCalledTimes(0);
   });
 });
 
@@ -246,7 +306,7 @@ describe("函数组件", () => {
       children?: JSXChild;
     };
 
-    function Card(props: CardProps): Renderable {
+    function Card(props: CardProps): Node {
       return (
         <section class="ns-card">
           <h2>{props.title}</h2>
@@ -256,9 +316,11 @@ describe("函数组件", () => {
     }
 
     const unmount = render(
-      <Card title="提示">
-        <p>{readNote}</p>
-      </Card>,
+      () => (
+        <Card title="提示">
+          <p>{readNote}</p>
+        </Card>
+      ),
       container,
     );
 
@@ -280,7 +342,7 @@ describe("函数组件", () => {
     const container = document.createElement("div");
     const onComponentRun = vi.fn();
 
-    function Counter(): Renderable {
+    function Counter(): Node {
       onComponentRun();
       const [count, setCount] = createSignal(0);
 
@@ -312,7 +374,7 @@ describe("函数组件", () => {
       );
     }
 
-    const unmount = render(<Counter />, container);
+    const unmount = render(() => <Counter />, container);
     const counter = container.querySelector<HTMLSpanElement>("#counter")!;
     const increment = container.querySelector<HTMLButtonElement>("#increment")!;
     const decrement = container.querySelector<HTMLButtonElement>("#decrement")!;
@@ -357,7 +419,7 @@ describe("函数组件", () => {
     const readDisabled = vi.fn(() => count() === 0);
     const handleClick = vi.fn(() => setCount(count() + 1));
 
-    function ActionBox(): Renderable {
+    function ActionBox(): Node {
       return (
         <div class={readClass}>
           <button id="act" type="button" disabled={readDisabled} onClick={handleClick}>
@@ -367,7 +429,7 @@ describe("函数组件", () => {
       );
     }
 
-    const unmount = render(<ActionBox />, container);
+    const unmount = render(() => <ActionBox />, container);
     const button = container.querySelector<HTMLButtonElement>("#act")!;
 
     setCount(1);
@@ -395,7 +457,7 @@ describe("函数组件", () => {
       id: string;
     };
 
-    function CounterItem(props: CounterItemProps): Renderable {
+    function CounterItem(props: CounterItemProps): Node {
       const [count, setCount] = createSignal(0);
       return (
         <div id={props.id}>
@@ -408,10 +470,12 @@ describe("函数组件", () => {
     }
 
     const unmount = render(
-      <div>
-        <CounterItem id="first" />
-        <CounterItem id="second" />
-      </div>,
+      () => (
+        <div>
+          <CounterItem id="first" />
+          <CounterItem id="second" />
+        </div>
+      ),
       container,
     );
 
@@ -423,5 +487,30 @@ describe("函数组件", () => {
     expect(second.querySelector(".value")?.textContent).toBe("0");
 
     unmount();
+  });
+
+  it("函数组件内直接调用 createEffect 与 onCleanup 会随 render 卸载自动释放", () => {
+    const container = document.createElement("div");
+    const [count, setCount] = createSignal(0);
+    const seen: number[] = [];
+    const stopped = vi.fn();
+
+    function Watcher(): Node {
+      createEffect(() => {
+        seen.push(count());
+      });
+      onCleanup(stopped);
+      return <p>{() => count()}</p>;
+    }
+
+    const unmount = render(() => <Watcher />, container);
+    setCount(1);
+    expect(seen).toEqual([0, 1]);
+    expect(stopped).toHaveBeenCalledTimes(0);
+
+    unmount();
+    setCount(2);
+    expect(seen).toEqual([0, 1]);
+    expect(stopped).toHaveBeenCalledTimes(1);
   });
 });

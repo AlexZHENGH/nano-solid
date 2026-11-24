@@ -1,6 +1,6 @@
-// 浏览器入口：用函数组件拆解 <Counter />、<EmptyState /> 与 <App />，只通过 render(<App />, app) 启动页面。
-import { createElement, render, type Renderable } from "./dom.ts";
-import { createSignal, type Dispose } from "./reactive.ts";
+// 浏览器入口：所有组件直接返回原生 Node，通过 render(() => <App />, app) 在根作用域内延迟挂载。
+import { createElement, render } from "./dom.ts";
+import { createSignal, onCleanup, type Dispose } from "./reactive.ts";
 
 /** 计数器子组件的输入属性。 */
 type CounterProps = {
@@ -22,9 +22,9 @@ type CounterProps = {
  * 计数器函数组件：只在挂载时执行一次，后续靠细粒度表达式更新文本、class 和 disabled。
  *
  * @param props 计数值读取器、交互回调与观察钩子。
- * @returns 包含计数展示区与加减重置按钮的 Renderable 视图。
+ * @returns 包含计数展示区与加减重置按钮的原生 DOM 节点。
  */
-function Counter(props: CounterProps): Renderable {
+function Counter(props: CounterProps): Node {
   // 组件函数在每次创建挂载时记录一次；后续点按钮只会更新细粒度表达式，不会再次走到这里。
   props.onComponentRun();
 
@@ -69,18 +69,18 @@ function Counter(props: CounterProps): Renderable {
 /**
  * 卸载后展示在宿主容器内的虚线占位组件。
  *
- * @returns 展示“已卸载”说明的段落 Renderable。
+ * @returns 展示“已卸载”说明的段落节点。
  */
-function EmptyState(): Renderable {
+function EmptyState(): Node {
   return <p class="ns-empty">组件已卸载，对应订阅和事件监听已全部释放。</p>;
 }
 
 /**
  * 应用根组件：管理计数状态、挂载切换以及“组件执行次数 / 文本更新次数”对比观察。
  *
- * @returns 完整计数器演示卡片的 Renderable。
+ * @returns 完整计数器演示卡片的原生 DOM 节点。
  */
-function App(): Renderable {
+function App(): Node {
   // 1. 定义页面级状态：计数值、挂载开关，以及组件执行与文本更新的对比统计。
   const [count, setCount] = createSignal(0);
   const [mounted, setMounted] = createSignal(true);
@@ -108,26 +108,31 @@ function App(): Renderable {
   const mountActiveView = (shouldMount: boolean) => {
     unmountActiveView?.();
     unmountActiveView = render(
-      shouldMount ? (
-        <Counter
-          count={count}
-          onIncrement={() => setCount(count() + 1)}
-          onDecrement={() => setCount(count() - 1)}
-          onReset={() => setCount(0)}
-          onComponentRun={recordComponentRun}
-          onTextUpdate={recordTextUpdate}
-        />
-      ) : (
-        <EmptyState />
-      ),
+      () =>
+        shouldMount ? (
+          <Counter
+            count={count}
+            onIncrement={() => setCount(count() + 1)}
+            onDecrement={() => setCount(count() - 1)}
+            onReset={() => setCount(0)}
+            onComponentRun={recordComponentRun}
+            onTextUpdate={recordTextUpdate}
+          />
+        ) : (
+          <EmptyState />
+        ),
       host,
     );
   };
 
-  // 3. 首次创建即挂载 <Counter />，并把它的清理接进宿主节点的 dispose 中。
+  // 3. 首次创建即挂载 <Counter />，并直接用 onCleanup 把子视图清理挂到 App 所属的根作用域。
   mountActiveView(true);
+  onCleanup(() => {
+    unmountActiveView?.();
+    unmountActiveView = undefined;
+  });
 
-  // 4. 用纯 JSX 拼装外层卡片：头部徽章、动态子视图宿主、操作按钮栏与观察统计行。
+  // 4. 用纯 JSX 拼装外层卡片：直接嵌入原生 host 节点，无需再包一层 Renderable。
   return (
     <section class="ns-card">
       <div class="ns-card-header">
@@ -136,13 +141,7 @@ function App(): Renderable {
           {() => (mounted() ? "已挂载" : "已卸载")}
         </span>
       </div>
-      {{
-        node: host,
-        dispose: () => {
-          unmountActiveView?.();
-          unmountActiveView = undefined;
-        },
-      }}
+      {host}
       <hr class="ns-divider" />
       <div class="ns-actions">
         <button
@@ -171,5 +170,5 @@ function App(): Renderable {
 const app = document.querySelector<HTMLElement>("#app");
 
 if (app) {
-  render(<App />, app);
+  render(() => <App />, app);
 }
