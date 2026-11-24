@@ -1,0 +1,26 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "7. 派生状态与列表渲染"
+description: "实现带缓存与同值截断的 createMemo、按 key 复用与原地重排的 <For>、表单输入绑定与公共入口，在 examples/todo-app/ 中完成 Todo 应用。"
+---
+
+import TodoAppDemo from "../../components/TodoAppDemo";
+
+在 [6.4](../6.4-show/) 结束时，我们已经拥有了细粒度信号、JSX、函数组件、所有权树和条件渲染 `<Show>`。到这一步，其实距离用自己的框架写出一个真正的 **Todo 应用**（新增、勾选完成、行内编辑、`全部 / 未完成 / 已完成` 筛选与统计）只差最后三块拼图：
+
+1. **派生状态缓存 `createMemo`**：把“按当前筛选条件过滤出的列表 `visibleTodos`”和“未完成数量 `remainingCount`”缓存起来，多处读取不重复计算，结果没变时不唤醒下游。
+2. **列表渲染 `<For>`**：用 `getKey` 按任务 `id` 复用已有 `<li>` 节点与独立作用域，勾选完成或重排时原地更新内容而不推倒重建整张表，删除任务时自动释放对应行的订阅与监听。
+3. **表单输入与 `ref`**：给元素补上 `value`、`checked`、`placeholder`、`onInput`、`onChange` 和 `ref`，让受控输入框、复选框和添加后的自动聚焦顺利跑起来。
+
+学完这一章后，我们会正式把框架代码和应用代码分层：在 `src/index.ts` 梳理出 `nano-solid` 的公共 API 导出，并在 `examples/todo-app/` 下交付下面这个完整的 Todo 示例应用（后续章节的持久化、异步请求与调度也都会在这个示例应用上继续演进）。
+
+先体验一下本章的终点效果。试着添加一条新任务、勾选左侧复选框、点 `编辑` 体验 `<Show>` 切换行内输入框，再点 `全部 / 未完成 / 已完成` 切换筛选：
+
+<TodoAppDemo label="第七章预期效果：完整的 nano-solid Todo 应用" client:load />
+
+这一章分四小节推进：
+
+- **7.1 `createMemo` 派生状态缓存**：基于内部 `createSignal` 和 `createEffect` 缓存计算结果，用 `Object.is` 截断同值更新，并跟随当前 Owner 自动释放。
+- **7.2 列表渲染 `<For>` 与按 key 复用**：用双 `Comment` 锚点、每行独立 `createRoot` 与 `getKey` 实现列表渲染、节点复用、响应式 `item() / index()` 和原地重排。
+- **7.3 表单输入绑定与 `ref`**：扩展 `ElementProps` 支持静态/响应式 `value`、`checked`、`placeholder`、`onInput`、`onChange` 和 `ref` 回调。
+- **7.4 整理公共导出**：建立 `src/index.ts` 公共 API 导出并通过包内路径映射直接免构建热更新，在 `examples/todo-app/` 跑出与上方演示完全一致的 Todo 应用。
