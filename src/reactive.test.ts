@@ -310,7 +310,7 @@ it("内层 effect 抛错释放自己时不会影响外层 effect 继续追踪", 
   expect(outerSeen).toEqual([0, 1]);
 });
 
-it.skip("外层 effect 重跑前会清理上一轮创建的内层 effect", () => {
+it("外层 effect 重跑前会清理上一轮创建的内层 effect", () => {
   const [outer, setOuter] = createSignal(0);
   const [inner, setInner] = createSignal(0);
   const logs: string[] = [];
@@ -333,7 +333,7 @@ it.skip("外层 effect 重跑前会清理上一轮创建的内层 effect", () =>
   expect(logs).toEqual(["2:1"]);
 });
 
-it.skip("释放外层 effect 时会递归释放多层嵌套的后代 effect", () => {
+it("释放外层 effect 时会递归释放多层嵌套的后代 effect", () => {
   const [outer, setOuter] = createSignal(0);
   const [middle, setMiddle] = createSignal(0);
   const [inner, setInner] = createSignal(0);
@@ -364,7 +364,7 @@ it.skip("释放外层 effect 时会递归释放多层嵌套的后代 effect", ()
   expect([outerRuns, middleRuns, innerRuns]).toEqual([1, 1, 1]);
 });
 
-it.skip("内层 effect 抛错被接住后仍会恢复外层所有权上下文", () => {
+it("内层 effect 抛错被接住后仍会恢复外层所有权上下文", () => {
   const [outer, setOuter] = createSignal(0);
   const [inner, setInner] = createSignal(0);
   const seen: string[] = [];
@@ -395,7 +395,7 @@ it.skip("内层 effect 抛错被接住后仍会恢复外层所有权上下文", 
   expect(seen).toEqual(["1:1"]);
 });
 
-it.skip("外层 effect 创建内层 effect 后中途抛错时也会清理已创建的内层 effect", () => {
+it("外层 effect 创建内层 effect 后中途抛错时也会清理已创建的内层 effect", () => {
   const [inner, setInner] = createSignal(0);
   let innerRuns = 0;
 

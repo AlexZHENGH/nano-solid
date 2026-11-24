@@ -26,7 +26,6 @@ type Effect = Owner & {
 let currentEffect: Effect | undefined;
 
 /** 记录当前活跃的所有权作用域，新创建的子 effect 会自动归属于它。 */
-// oxlint-disable-next-line no-unassigned-vars -- 完成 TODO 后删除这行
 let currentOwner: Owner | undefined;
 
 /**
@@ -47,10 +46,13 @@ function cleanupDependencies(effect: Effect): void {
  *
  * @param owner 即将重跑或待释放的所有权节点。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function cleanupChildren(owner: Owner): void {
   // 先复制快照并清空 owner.children，再按逆序逐个调用 disposeOwner 递归清理后代。
-  // TODO: 复制 Array.from(owner.children)、清空 owner.children，并逆序遍历调用 disposeOwner(child)。
+  const children = Array.from(owner.children);
+  owner.children.clear();
+  for (const child of children.reverse()) {
+    disposeOwner(child);
+  }
 }
 
 /**
@@ -78,12 +80,13 @@ function runEffect(effect: Effect): void {
   if (effect.disposed) return;
   cleanupDependencies(effect);
   // 重跑前先清理上一轮执行期间创建的全部子作用域，避免嵌套 effect 随重跑不断堆叠。
-  // TODO: 调用 cleanupChildren(effect)。
+  cleanupChildren(effect);
 
   // 保存外层追踪与所有权上下文，并在 try/finally 中恢复；若回调抛错，则在 catch 中释放半截订阅与子作用域后继续抛出。
   const previousEffect = currentEffect;
-  // TODO: 保存 previousOwner = currentOwner，并将 currentOwner 设为 effect（在 finally 中恢复）。
+  const previousOwner = currentOwner;
   currentEffect = effect;
+  currentOwner = effect;
   try {
     effect.callback();
   } catch (error) {
@@ -91,6 +94,7 @@ function runEffect(effect: Effect): void {
     throw error;
   } finally {
     currentEffect = previousEffect;
+    currentOwner = previousOwner;
   }
 }
 
@@ -111,7 +115,9 @@ export function createEffect(callback: EffectCallback): Dispose {
   effect.onDispose = () => cleanupDependencies(effect);
 
   // 若存在未释放的父作用域，把当前 effect 挂入其 children，便于父作用域重跑或销毁时统一回收。
-  // TODO: 若 currentOwner && !currentOwner.disposed，将 effect 加入 currentOwner.children。
+  if (currentOwner && !currentOwner.disposed) {
+    currentOwner.children.add(effect);
+  }
 
   runEffect(effect);
   return () => disposeOwner(effect);
