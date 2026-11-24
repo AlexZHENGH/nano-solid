@@ -6,7 +6,7 @@ import { jsx } from "./jsx-runtime.ts";
 import { createSignal } from "./reactive.ts";
 
 describe("JSX 运行时与子节点归一化", () => {
-  it.skip("将原生 JSX 元素与嵌套静态子节点转为真实 DOM", () => {
+  it("将原生 JSX 元素与嵌套静态子节点转为真实 DOM", () => {
     const view = (
       <div>
         <p>Hello</p>
@@ -19,7 +19,7 @@ describe("JSX 运行时与子节点归一化", () => {
     expect(view.node.textContent).toBe("Hellonano-solid");
   });
 
-  it.skip("保留数字 0 为文本，同时忽略 boolean、null 与 undefined", () => {
+  it("保留数字 0 为文本，同时忽略 boolean、null 与 undefined", () => {
     const view = (
       <p>
         {0}
@@ -35,13 +35,13 @@ describe("JSX 运行时与子节点归一化", () => {
     expect(view.node.textContent).toBe("042");
   });
 
-  it.skip("递归展平嵌套数组子节点并按原顺序挂载", () => {
+  it("递归展平嵌套数组子节点并按原顺序挂载", () => {
     const view = <p>{["A", ["B", [0, "C", false, null]]]}</p>;
 
     expect(view.node.textContent).toBe("AB0C");
   });
 
-  it.skip("将函数子节点转为响应式文本，并在卸载后停止更新", () => {
+  it("将函数子节点转为响应式文本，并在卸载后停止更新", () => {
     const container = document.createElement("div");
     const [count, setCount] = createSignal(0);
     const readCount = vi.fn(() => count());
@@ -61,7 +61,7 @@ describe("JSX 运行时与子节点归一化", () => {
     expect(readCount).toHaveBeenCalledTimes(2);
   });
 
-  it.skip("传入不支持的子节点类型时显式抛错", () => {
+  it("传入不支持的子节点类型时显式抛错", () => {
     expect(() => jsx("div", { children: {} as never })).toThrow(/Unsupported JSX child/);
   });
 });

@@ -1,5 +1,4 @@
 import {
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   createReactiveText,
   createRenderableElement,
   createStaticText,
@@ -31,7 +30,6 @@ export type Props = {
  * @param value 待判断的子节点值。
  * @returns 若为包含 DOM Node 与 dispose 函数的 Renderable 则返回 true。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function isRenderable(value: unknown): value is Renderable {
   return (
     typeof value === "object" &&
@@ -59,8 +57,23 @@ function normalizeChildren(children: JSXChild): Renderable[] {
   }
 
   // 把嵌套数组、数字（含 0）、响应式函数子节点和已有 Renderable 统一转换为 Renderable 列表。
-  // TODO: 依次处理 Array.isArray(children)、number、function（交给 createReactiveText）与 isRenderable(children)，其余不支持的值抛出 Error。
-  return [];
+  if (Array.isArray(children)) {
+    return children.flatMap(normalizeChildren);
+  }
+
+  if (typeof children === "number") {
+    return [createStaticText(String(children))];
+  }
+
+  if (typeof children === "function") {
+    return [createReactiveText(() => String(children()))];
+  }
+
+  if (isRenderable(children)) {
+    return [children];
+  }
+
+  throw new Error(`Unsupported JSX child: ${String(children)}`);
 }
 
 /**

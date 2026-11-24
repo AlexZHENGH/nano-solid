@@ -1,0 +1,41 @@
+在 `normalizeChildren(children)` 中按顺序补齐数组展平、数字转文本、函数转响应式文本、已有 `Renderable` 透传以及未知类型报错：
+
+```ts
+function normalizeChildren(children: JSXChild): Renderable[] {
+  if (children === undefined || children === null || typeof children === "boolean") {
+    return [];
+  }
+
+  if (typeof children === "string") {
+    return [createStaticText(children)];
+  }
+
+  // 把嵌套数组、数字（含 0）、响应式函数子节点和已有 Renderable 统一转换为 Renderable 列表。
+  if (Array.isArray(children)) {
+    return children.flatMap(normalizeChildren);
+  }
+
+  if (typeof children === "number") {
+    return [createStaticText(String(children))];
+  }
+
+  if (typeof children === "function") {
+    return [createReactiveText(() => String(children()))];
+  }
+
+  if (isRenderable(children)) {
+    return [children];
+  }
+
+  throw new Error(`Unsupported JSX child: ${String(children)}`);
+}
+```
+
+因为空值和布尔值是通过严格类型检查过滤的，数字 `0` 会安全落进 `typeof children === "number"` 分支并渲染出 `"0"`。函数子节点包装成 `createReactiveText` 后会直接作为父元素的子节点之一挂进 `Renderable` 树，父树卸载时自然会一并释放订阅。
+
+保存后运行 `pnpm dev` 可以看到底部的信号当前值和更新次数行恢复实时显示，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build` 35 条测试和构建全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 5.1-learn 5.1-solution -- src
+```
