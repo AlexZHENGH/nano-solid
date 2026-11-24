@@ -1,0 +1,27 @@
+在 `render` 返回的卸载函数里用 `disposed` 守卫保证幂等，先释放整棵 `Renderable` 树，再通过 `parentNode?.removeChild` 只移除本次挂载的根节点：
+
+```ts
+export function render(renderable: Renderable<Node>, container: Node): Dispose {
+  mount(container, renderable.node);
+
+  let disposed = false;
+
+  return () => {
+    // 卸载函数必须幂等，先释放整棵树的响应式订阅与事件监听，再只把本次挂载的根节点从父节点移除。
+    if (disposed) return;
+    disposed = true;
+
+    renderable.dispose();
+    renderable.node.parentNode?.removeChild(renderable.node);
+  };
+}
+```
+
+保存后运行 `pnpm dev`，点击 `调用 dispose() 卸载` 会立即把计数器移除并显示占位提示，继续点击 `外部写入 setCount(...)` 只会更新信号当前值、响应式文本更新次数保持不变，点击 `重新挂载` 后恢复正常，行为与 [4.0](../4.0-dom-renderer/) 完全一致。运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，30 条测试和构建全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 4.4-learn 4.4-solution -- src
+```
+
+到这里，第四章全部结束。我们已经拥有了一个能把 `createSignal`、`createEffect` 接到真实浏览器 DOM、并在卸载时自动清理整棵树订阅的最小渲染器。下一章可以继续往上走：把一层层手写的 `createRenderableElement` 替换成 JSX 语法与声明式属性、事件绑定。

@@ -129,7 +129,7 @@ describe("元素树与递归释放", () => {
 });
 
 describe("render 挂载与卸载", () => {
-  it.skip("挂载后卸载只移除本次挂载的节点，且重复调用保持安全", () => {
+  it("挂载后卸载只移除本次挂载的节点，且重复调用保持安全", () => {
     const container = createElement("div");
     const sibling = createElement("span");
     sibling.textContent = "兄弟节点";
@@ -150,7 +150,7 @@ describe("render 挂载与卸载", () => {
     expect(container.childNodes.length).toBe(1);
   });
 
-  it.skip("卸载时同步释放子树订阅，已移除的文本节点不再随 signal 更新", () => {
+  it("卸载时同步释放子树订阅，已移除的文本节点不再随 signal 更新", () => {
     const container = createElement("div");
     const [count, setCount] = createSignal(0);
     const getValue = vi.fn(() => String(count()));
@@ -173,7 +173,7 @@ describe("render 挂载与卸载", () => {
     expect(getValue).toHaveBeenCalledTimes(2);
   });
 
-  it.skip("重复调用卸载函数时只执行一次底层 dispose", () => {
+  it("重复调用卸载函数时只执行一次底层 dispose", () => {
     const container = createElement("div");
     const dispose = vi.fn();
     const view = { node: createElement("div"), dispose };
