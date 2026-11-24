@@ -143,3 +143,40 @@ it("写入 -0 替换 +0 时会视为新值", () => {
   setZero(-0);
   expect(runs).toBe(2);
 });
+
+it.skip("切换分支后不再响应旧分支的写入", () => {
+  const [isLeft, setIsLeft] = createSignal(true);
+  const [left, setLeft] = createSignal(0);
+  const [right, setRight] = createSignal(10);
+  const seen: number[] = [];
+
+  createEffect(() => {
+    seen.push(isLeft() ? left() : right());
+  });
+
+  // 切到右侧分支后，再修改旧的 left 不应该再次唤醒 effect。
+  setIsLeft(false);
+  setLeft(1);
+  setRight(11);
+
+  expect(seen).toEqual([0, 10, 11]);
+});
+
+it.skip("切回原分支后会重新追踪原分支并放弃另一侧", () => {
+  const [isLeft, setIsLeft] = createSignal(true);
+  const [left, setLeft] = createSignal(0);
+  const [right, setRight] = createSignal(10);
+  const seen: number[] = [];
+
+  createEffect(() => {
+    seen.push(isLeft() ? left() : right());
+  });
+
+  setIsLeft(false);
+  setIsLeft(true);
+  // 已经切回左侧分支，修改 right 不应再触发重跑，修改 left 应恢复触发。
+  setRight(12);
+  setLeft(2);
+
+  expect(seen).toEqual([0, 10, 0, 2]);
+});
