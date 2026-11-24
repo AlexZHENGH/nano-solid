@@ -24,6 +24,7 @@ import { frontmatter as ownershipShow } from "./lessons/6.0-ownership-and-show.m
 import { frontmatter as nestedEffects } from "./lessons/6.1-nested-effects.mdx";
 import { frontmatter as rootCleanup } from "./lessons/6.2-root-and-cleanup.mdx";
 import { frontmatter as nativeNodesRender } from "./lessons/6.3-native-nodes-render.mdx";
+import { frontmatter as showControlFlow } from "./lessons/6.4-show.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -52,6 +53,7 @@ const ownershipShowUrl = `${baseUrl}/lessons/6.0-ownership-and-show/`;
 const nestedEffectsUrl = `${baseUrl}/lessons/6.1-nested-effects/`;
 const rootCleanupUrl = `${baseUrl}/lessons/6.2-root-and-cleanup/`;
 const nativeNodesRenderUrl = `${baseUrl}/lessons/6.3-native-nodes-render/`;
+const showControlFlowUrl = `${baseUrl}/lessons/6.4-show/`;
 ---
 
 <BookLayout
@@ -125,5 +127,6 @@ const nativeNodesRenderUrl = `${baseUrl}/lessons/6.3-native-nodes-render/`;
     <li><a href={nestedEffectsUrl}>{nestedEffects.title}</a></li>
     <li><a href={rootCleanupUrl}>{rootCleanup.title}</a></li>
     <li><a href={nativeNodesRenderUrl}>{nativeNodesRender.title}</a></li>
+    <li><a href={showControlFlowUrl}>{showControlFlow.title}</a></li>
   </ul>
 </BookLayout>

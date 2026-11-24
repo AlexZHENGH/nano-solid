@@ -32,4 +32,4 @@ import OwnershipShowDemo from "../../components/OwnershipShowDemo";
 - **[6.1 嵌套 effect 归谁清理](../6.1-nested-effects/)**：把记录归属的 `currentOwner` 与追踪依赖的 `currentEffect` 分开，让外层 effect 重跑或释放时自动清理内层后代 effect。
 - **[6.2 `createRoot` 与 `onCleanup`](../6.2-root-and-cleanup/)**：提供可独立释放的根作用域与 LIFO 清理钩子，并在非追踪环境下安全执行清理、在构造抛错时自动回滚已登记资源。
 - **[6.3 原生节点与延迟挂载](../6.3-native-nodes-render/)**：正式退掉 `Renderable`，让 DOM 与 JSX 直接返回原生 `Node`，将 `render` 升级为 `render(() => <App />, container)`，自动兜住兄弟节点抛错回滚。
-- **6.4 条件渲染 `<Show>`**：用一对 `Comment` 锚点节点和懒分支工厂实现 `<Show>`，彻底删掉 `src/main.tsx` 里的手写 `host` 与切换句柄。
+- **[6.4 条件渲染 `<Show>`](../6.4-show/)**：用一对 `Comment` 锚点节点和懒分支工厂实现 `<Show>`，彻底删掉 `src/main.tsx` 里的手写 `host` 与切换句柄。

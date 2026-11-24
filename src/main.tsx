@@ -1,63 +1,62 @@
-// 浏览器入口：所有组件直接返回原生 Node，通过 render(() => <App />, app) 在根作用域内延迟挂载。
-import { createElement, render } from "./dom.ts";
-import { createSignal, onCleanup, type Dispose } from "./reactive.ts";
+// 浏览器入口：用 <Show> 与组件内 onCleanup 管理条件切换与后台定时器清理。
+import { Show } from "./control-flow.ts";
+import { render } from "./dom.ts";
+import { createSignal, onCleanup } from "./reactive.ts";
 
-/** 计数器子组件的输入属性。 */
-type CounterProps = {
-  /** 读取当前计数值的 signal getter。 */
-  count: () => number;
-  /** 递增计数的回调。 */
-  onIncrement: () => void;
-  /** 递减计数的回调。 */
-  onDecrement: () => void;
-  /** 重置计数的回调。 */
-  onReset: () => void;
-  /** 组件函数被创建调用时触发，用于验证更新不会重跑组件函数。 */
-  onComponentRun: () => void;
-  /** 响应式文本重新求值时触发，用于对比组件函数执行次数。 */
-  onTextUpdate: () => void;
+/** 带后台定时器的计数器子组件输入属性。 */
+type LiveCounterProps = {
+  /** 后台定时器每次触发时递增外层观察计数。 */
+  onTick: () => void;
+  /** 组件被所有权树清理时递增外层清理计数。 */
+  onDispose: () => void;
 };
 
 /**
- * 计数器函数组件：只在挂载时执行一次，后续靠细粒度表达式更新文本、class 和 disabled。
+ * 带后台定时器的计数器函数组件：挂载时启动定时器，并通过 onCleanup 在隐藏或卸载时自动停止。
  *
- * @param props 计数值读取器、交互回调与观察钩子。
- * @returns 包含计数展示区与加减重置按钮的原生 DOM 节点。
+ * @param props 向外层汇报 tick 与清理次数的观察回调。
+ * @returns 渲染本地计数与加减重置按钮的原生 DOM 节点。
  */
-function Counter(props: CounterProps): Node {
-  // 组件函数在每次创建挂载时记录一次；后续点按钮只会更新细粒度表达式，不会再次走到这里。
-  props.onComponentRun();
+function LiveCounter(props: LiveCounterProps): Node {
+  // 组件自有的局部状态：每次被 <Show> 重新显示都会得到全新的初始计数 0。
+  const [count, setCount] = createSignal(0);
+
+  // 启动后台定时器，并把停止逻辑通过 onCleanup 交给当前分支的 Owner 管理。
+  const timer = window.setInterval(() => {
+    props.onTick();
+  }, 1000);
+
+  onCleanup(() => {
+    window.clearInterval(timer);
+    props.onDispose();
+  });
 
   return (
     <div>
       {/* 计数展示区：负数时通过响应式 class 切换为警示色。 */}
       <div class="ns-counter-display">
-        <span class="ns-counter-label">当前计数</span>
+        <span class="ns-counter-label">当前计数（组件局部状态）</span>
         <span
           class={() =>
-            props.count() < 0 ? "ns-counter-value ns-counter-value-negative" : "ns-counter-value"
+            count() < 0 ? "ns-counter-value ns-counter-value-negative" : "ns-counter-value"
           }
         >
-          {() => {
-            const current = props.count();
-            props.onTextUpdate();
-            return current;
-          }}
+          {() => count()}
         </span>
       </div>
       {/* 操作按钮栏：计数为 0 时通过响应式 disabled 自动禁用重置按钮。 */}
       <div class="ns-actions">
-        <button type="button" class="ns-btn" onClick={props.onIncrement}>
+        <button type="button" class="ns-btn" onClick={() => setCount(count() + 1)}>
           +1
         </button>
-        <button type="button" class="ns-btn" onClick={props.onDecrement}>
+        <button type="button" class="ns-btn" onClick={() => setCount(count() - 1)}>
           -1
         </button>
         <button
           type="button"
           class="ns-btn"
-          disabled={() => props.count() === 0}
-          onClick={props.onReset}
+          disabled={() => count() === 0}
+          onClick={() => setCount(0)}
         >
           重置
         </button>
@@ -67,101 +66,63 @@ function Counter(props: CounterProps): Node {
 }
 
 /**
- * 卸载后展示在宿主容器内的虚线占位组件。
+ * 计数器隐藏后展示的虚线占位组件。
  *
- * @returns 展示“已卸载”说明的段落节点。
+ * @returns 展示“已隐藏”说明的段落节点。
  */
 function EmptyState(): Node {
-  return <p class="ns-empty">组件已卸载，对应订阅和事件监听已全部释放。</p>;
+  return <p class="ns-empty">计数器已隐藏，组件内定时器也已通过 onCleanup 自动停止。</p>;
 }
 
 /**
- * 应用根组件：管理计数状态、挂载切换以及“组件执行次数 / 文本更新次数”对比观察。
+ * 应用根组件：用声明式 <Show> 控制子组件显隐，并在外部实时观察后台定时器 tick 与清理次数。
  *
- * @returns 完整计数器演示卡片的原生 DOM 节点。
+ * @returns 完整演示卡片的原生 DOM 节点。
  */
 function App(): Node {
-  // 1. 定义页面级状态：计数值、挂载开关，以及组件执行与文本更新的对比统计。
-  const [count, setCount] = createSignal(0);
-  const [mounted, setMounted] = createSignal(true);
-  const [componentRuns, setComponentRuns] = createSignal(0);
-  const [textUpdates, setTextUpdates] = createSignal(0);
+  // 1. 定义显示开关，以及挂在 <Show> 外层的定时器 tick 与 onCleanup 清理统计。
+  const [visible, setVisible] = createSignal(true);
+  const [ticks, setTicks] = createSignal(0);
+  const [cleanups, setCleanups] = createSignal(0);
 
-  // 用普通计数累加再写入 signal，避免观察回调里的读取反向订阅自身形成循环。
-  let runCount = 0;
-  const recordComponentRun = () => {
-    runCount += 1;
-    setComponentRuns(runCount);
+  // 用普通计数累加再写入 signal，避免观察回调里的读取反向订阅自身。
+  let tickCount = 0;
+  const recordTick = () => {
+    tickCount += 1;
+    setTicks(tickCount);
   };
 
-  let updateCount = 0;
-  const recordTextUpdate = () => {
-    updateCount += 1;
-    setTextUpdates(updateCount);
+  let cleanupCount = 0;
+  const recordCleanup = () => {
+    cleanupCount += 1;
+    setCleanups(cleanupCount);
   };
 
-  // 2. 独立挂载宿主与当前活跃子组件的卸载句柄。
-  const host = createElement("div");
-  let unmountActiveView: Dispose | undefined;
-
-  /** 按指定状态在宿主容器内挂载 <Counter /> 或 <EmptyState />。 */
-  const mountActiveView = (shouldMount: boolean) => {
-    unmountActiveView?.();
-    unmountActiveView = render(
-      () =>
-        shouldMount ? (
-          <Counter
-            count={count}
-            onIncrement={() => setCount(count() + 1)}
-            onDecrement={() => setCount(count() - 1)}
-            onReset={() => setCount(0)}
-            onComponentRun={recordComponentRun}
-            onTextUpdate={recordTextUpdate}
-          />
-        ) : (
-          <EmptyState />
-        ),
-      host,
-    );
-  };
-
-  // 3. 首次创建即挂载 <Counter />，并直接用 onCleanup 把子视图清理挂到 App 所属的根作用域。
-  mountActiveView(true);
-  onCleanup(() => {
-    unmountActiveView?.();
-    unmountActiveView = undefined;
-  });
-
-  // 4. 用纯 JSX 拼装外层卡片：直接嵌入原生 host 节点，无需再包一层 Renderable。
+  // 2. 用纯声明式 JSX 拼装整张卡片：彻底告别手写 host 容器与 unmountActiveView。
   return (
     <section class="ns-card">
       <div class="ns-card-header">
-        <h1 class="ns-card-title">nano-solid 计数器</h1>
-        <span class={() => (mounted() ? "ns-badge" : "ns-badge ns-badge-muted")}>
-          {() => (mounted() ? "已挂载" : "已卸载")}
+        <h1 class="ns-card-title">nano-solid 计数器（自动清理演示）</h1>
+        <span class={() => (visible() ? "ns-badge" : "ns-badge ns-badge-muted")}>
+          {() => (visible() ? "显示中" : "已隐藏")}
         </span>
       </div>
-      {host}
+      <Show when={visible} fallback={() => <EmptyState />}>
+        {() => <LiveCounter onTick={recordTick} onDispose={recordCleanup} />}
+      </Show>
       <hr class="ns-divider" />
       <div class="ns-actions">
         <button
           type="button"
-          class={() => (mounted() ? "ns-btn ns-btn-danger" : "ns-btn")}
-          onClick={() => {
-            const nextMounted = !mounted();
-            setMounted(nextMounted);
-            mountActiveView(nextMounted);
-          }}
+          class={() => (visible() ? "ns-btn ns-btn-danger" : "ns-btn")}
+          onClick={() => setVisible(!visible())}
         >
-          {() => (mounted() ? "调用 dispose() 卸载" : "重新挂载")}
-        </button>
-        <button type="button" class="ns-btn" onClick={() => setCount(count() + 1)}>
-          {() => `外部写入 setCount(${count() + 1})`}
+          {() => (visible() ? "隐藏计数器（触发 onCleanup）" : "重新显示计数器")}
         </button>
       </div>
       <p class="ns-meta">
-        组件函数执行次数：<code>{() => componentRuns()}</code>，文本节点更新次数：
-        <code>{() => textUpdates()}</code>
+        后台定时器 tick：<code>{() => ticks()}</code>，<code>onCleanup</code> 清理次数：
+        <code>{() => cleanups()}</code>
       </p>
     </section>
   );
