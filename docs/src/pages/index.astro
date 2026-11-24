@@ -8,6 +8,7 @@ import { frontmatter as trackEffects } from "./lessons/2.3-track-effects.mdx";
 import { frontmatter as effectLifecycle } from "./lessons/3.0-effect-lifecycle.mdx";
 import { frontmatter as sameValue } from "./lessons/3.1-same-value.mdx";
 import { frontmatter as dynamicDependencies } from "./lessons/3.2-dynamic-dependencies.mdx";
+import { frontmatter as disposeEffect } from "./lessons/3.3-dispose.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -20,6 +21,7 @@ const trackEffectsUrl = `${baseUrl}/lessons/2.3-track-effects/`;
 const effectLifecycleUrl = `${baseUrl}/lessons/3.0-effect-lifecycle/`;
 const sameValueUrl = `${baseUrl}/lessons/3.1-same-value/`;
 const dynamicDependenciesUrl = `${baseUrl}/lessons/3.2-dynamic-dependencies/`;
+const disposeEffectUrl = `${baseUrl}/lessons/3.3-dispose/`;
 ---
 
 <BookLayout
@@ -71,5 +73,6 @@ const dynamicDependenciesUrl = `${baseUrl}/lessons/3.2-dynamic-dependencies/`;
   <ul class="course-lessons">
     <li><a href={sameValueUrl}>{sameValue.title}</a></li>
     <li><a href={dynamicDependenciesUrl}>{dynamicDependencies.title}</a></li>
+    <li><a href={disposeEffectUrl}>{disposeEffect.title}</a></li>
   </ul>
 </BookLayout>

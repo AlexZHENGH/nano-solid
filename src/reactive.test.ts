@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createEffect, createSignal } from "./reactive.ts";
+import { createEffect, createSignal, type Dispose } from "./reactive.ts";
 
 it("创建后 getter 返回初始值", () => {
   const [count] = createSignal(0);
@@ -179,4 +179,65 @@ it("切回原分支后会重新追踪原分支并放弃另一侧", () => {
   setLeft(2);
 
   expect(seen).toEqual([0, 10, 0, 2]);
+});
+
+it.skip("调用 dispose 后不再响应后续写入，且重复调用安全", () => {
+  const [count, setCount] = createSignal(0);
+  const seen: number[] = [];
+
+  const dispose = createEffect(() => {
+    seen.push(count());
+  });
+
+  setCount(1);
+  dispose();
+  // 重复释放应保持幂等，不抛错也不影响 signal 自身读写。
+  dispose();
+  setCount(2);
+
+  expect(count()).toBe(2);
+  expect(seen).toEqual([0, 1]);
+});
+
+it.skip("同一轮通知中前一个 effect 释放后一个 effect 时会跳过执行", () => {
+  const [count, setCount] = createSignal(0);
+  let secondRuns = 0;
+  let disposeSecond: Dispose | undefined;
+
+  createEffect(() => {
+    if (count() > 0) {
+      // 同一轮 setCount(1) 快照里后一个 effect 已经排队，但这里提前释放了它。
+      disposeSecond?.();
+    }
+  });
+
+  disposeSecond = createEffect(() => {
+    count();
+    secondRuns += 1;
+  });
+
+  expect(secondRuns).toBe(1);
+  setCount(1);
+  expect(secondRuns).toBe(1);
+});
+
+it.skip("effect 在回调中释放自己后不再响应后续写入", () => {
+  const [count, setCount] = createSignal(0);
+  const [other, setOther] = createSignal(0);
+  let runs = 0;
+
+  const dispose = createEffect(() => {
+    runs += 1;
+    if (count() >= 1) {
+      dispose();
+      // 即使自释放后继续读值，也不应重新建立订阅或再次唤醒。
+      other();
+    }
+  });
+
+  setCount(1);
+  setOther(1);
+  setCount(2);
+
+  expect(runs).toBe(2);
 });

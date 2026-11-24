@@ -1,12 +1,16 @@
 /** 会随读取过的 signal 变化而重新执行的副作用函数。 */
 export type EffectCallback = () => void;
 
+/** 用于停止一个 effect 订阅并释放依赖的清理函数。 */
+export type Dispose = () => void;
+
 /**
- * 内部维护的 effect 节点：除了用户回调外，还反向记录它登记在哪些 signal 的 subscribers 中。
+ * 内部维护的 effect 节点：保存用户回调、反向依赖集合，以及是否已经释放的状态。
  */
 type Effect = {
   callback: EffectCallback;
   dependencies: Set<Set<Effect>>;
+  disposed: boolean;
 };
 
 /** 记录当前同步执行中的 effect，getter 靠它知道这次读取该登记给谁。 */
@@ -15,7 +19,7 @@ let currentEffect: Effect | undefined;
 /**
  * 把 effect 从它上一轮订阅过的所有 signal 中移除，并清空自身依赖记录。
  *
- * @param effect 即将重跑的 effect 节点。
+ * @param effect 即将重跑或待释放的 effect 节点。
  */
 function cleanupDependencies(effect: Effect): void {
   // 逐个通知上一轮读过的 signal 删掉当前 effect，再清空反向集合，避免旧分支残留订阅。
@@ -26,11 +30,24 @@ function cleanupDependencies(effect: Effect): void {
 }
 
 /**
- * 在追踪上下文中执行 effect：先清理上一轮依赖，再运行回调重建本轮订阅，并在退出时恢复外层记录。
+ * 标记 effect 已释放并断开它持有的所有 signal 订阅，重复调用保持幂等。
+ *
+ * @param effect 需要停止响应的 effect 节点。
+ */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+function disposeEffect(effect: Effect): void {
+  // 已经释放过时直接返回，否则标记 disposed 并清理全部双向订阅。
+  // TODO: 若 effect.disposed 为 true 直接返回，否则置为 true 并调用 cleanupDependencies(effect)。
+}
+
+/**
+ * 在追踪上下文中执行 effect：跳过已释放节点，先清理上一轮依赖，再运行回调重建本轮订阅，并在退出时恢复外层记录。
  *
  * @param effect 本轮要执行的 effect 节点。
  */
 function runEffect(effect: Effect): void {
+  // 同一轮通知快照里，前面的 effect 可能已经释放了当前节点，进入前必须先跳过。
+  // TODO: 若 effect.disposed 为 true，直接返回。
   cleanupDependencies(effect);
   // 保存外层 effect，并在 try/finally 中恢复，避免嵌套或抛错后残留旧引用。
   const previous = currentEffect;
@@ -43,16 +60,19 @@ function runEffect(effect: Effect): void {
 }
 
 /**
- * 立即执行一次回调，让内部读取到的 signal 自动把回调登记为依赖。
+ * 立即执行一次回调，让内部读取到的 signal 自动把回调登记为依赖，并返回停止订阅的释放函数。
  *
  * @param callback 读取 signal 并执行副作用的回调函数。
+ * @returns 调用后即可退订并停止该 effect 的释放函数。
  */
-export function createEffect(callback: EffectCallback): void {
+export function createEffect(callback: EffectCallback): Dispose {
   const effect: Effect = {
     callback,
     dependencies: new Set(),
+    disposed: false,
   };
   runEffect(effect);
+  return () => disposeEffect(effect);
 }
 
 /**
@@ -67,13 +87,15 @@ export function createSignal<T>(initialValue: T) {
   const subscribers = new Set<Effect>();
 
   /**
-   * 读取当前闭包里保存的值，并在 effect 执行期间建立双向依赖关系。
+   * 读取当前闭包里保存的值，并在未释放的 effect 执行期间建立双向依赖关系。
    *
    * @returns 最新状态。
    */
   function get(): T {
     // 只有在同步执行中的 effect 读值时，才把它和当前 signal 互相登记。
     if (currentEffect) {
+      // effect 在回调中途自释放后，后续读值不应把它重新挂回 subscribers。
+      // TODO: 若 currentEffect.disposed 为 true，直接返回 value。
       subscribers.add(currentEffect);
       // 反向记录当前 signal 的 subscribers 集合，方便下次重跑前精准清理旧依赖。
       currentEffect.dependencies.add(subscribers);
