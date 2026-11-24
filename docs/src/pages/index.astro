@@ -26,6 +26,7 @@ import { frontmatter as rootCleanup } from "./lessons/6.2-root-and-cleanup.mdx";
 import { frontmatter as nativeNodesRender } from "./lessons/6.3-native-nodes-render.mdx";
 import { frontmatter as showControlFlow } from "./lessons/6.4-show.mdx";
 import { frontmatter as memoAndFor } from "./lessons/7.0-memo-and-for.mdx";
+import { frontmatter as memo } from "./lessons/7.1-memo.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -56,6 +57,7 @@ const rootCleanupUrl = `${baseUrl}/lessons/6.2-root-and-cleanup/`;
 const nativeNodesRenderUrl = `${baseUrl}/lessons/6.3-native-nodes-render/`;
 const showControlFlowUrl = `${baseUrl}/lessons/6.4-show/`;
 const memoAndForUrl = `${baseUrl}/lessons/7.0-memo-and-for/`;
+const memoUrl = `${baseUrl}/lessons/7.1-memo/`;
 ---
 
 <BookLayout
@@ -132,4 +134,7 @@ const memoAndForUrl = `${baseUrl}/lessons/7.0-memo-and-for/`;
     <li><a href={showControlFlowUrl}>{showControlFlow.title}</a></li>
   </ul>
   <h3 class="course-chapter"><a href={memoAndForUrl}>{memoAndFor.title}</a></h3>
+  <ul class="course-lessons">
+    <li><a href={memoUrl}>{memo.title}</a></li>
+  </ul>
 </BookLayout>

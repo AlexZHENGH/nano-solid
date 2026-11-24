@@ -20,7 +20,7 @@ import TodoAppDemo from "../../components/TodoAppDemo";
 
 这一章分四小节推进：
 
-- **7.1 `createMemo` 派生状态缓存**：基于内部 `createSignal` 和 `createEffect` 缓存计算结果，用 `Object.is` 截断同值更新，并跟随当前 Owner 自动释放。
+- **[7.1 `createMemo` 派生状态缓存](../7.1-memo/)**：基于内部 `createSignal` 和 `createEffect` 缓存计算结果，用 `Object.is` 截断同值更新，并跟随当前 Owner 自动释放。
 - **7.2 列表渲染 `<For>` 与按 key 复用**：用双 `Comment` 锚点、每行独立 `createRoot` 与 `getKey` 实现列表渲染、节点复用、响应式 `item() / index()` 和原地重排。
 - **7.3 表单输入绑定与 `ref`**：扩展 `ElementProps` 支持静态/响应式 `value`、`checked`、`placeholder`、`onInput`、`onChange` 和 `ref` 回调。
 - **7.4 整理公共导出**：建立 `src/index.ts` 公共 API 导出并通过包内路径映射直接免构建热更新，在 `examples/todo-app/` 跑出与上方演示完全一致的 Todo 应用。

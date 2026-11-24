@@ -1,5 +1,12 @@
 import { expect, it, vi } from "vitest";
-import { createEffect, createRoot, createSignal, onCleanup, type Dispose } from "./reactive.ts";
+import {
+  createEffect,
+  createMemo,
+  createRoot,
+  createSignal,
+  onCleanup,
+  type Dispose,
+} from "./reactive.ts";
 
 it("创建后 getter 返回初始值", () => {
   const [count] = createSignal(0);
@@ -570,6 +577,116 @@ it("onCleanup 回调在非追踪环境下执行，不会误把读值登记为外
   // 上一轮清理时读过 secret()，但修改 secret 不应触发重跑。
   setSecret(1);
   expect(outerRuns).toBe(2);
+});
+
+it.skip("多次读取 createMemo 直接命中缓存，不重复执行计算函数", () => {
+  const [count, setCount] = createSignal(2);
+  const compute = vi.fn(() => count() * 10);
+
+  const doubled = createMemo(compute);
+
+  expect(doubled()).toBe(20);
+  expect(doubled()).toBe(20);
+  expect(doubled()).toBe(20);
+  expect(compute).toHaveBeenCalledTimes(1);
+
+  setCount(3);
+  expect(doubled()).toBe(30);
+  expect(doubled()).toBe(30);
+  expect(compute).toHaveBeenCalledTimes(2);
+});
+
+it.skip("上游变化但派生结果按 Object.is 相同时，不唤醒下游 effect", () => {
+  const [count, setCount] = createSignal(1);
+  const compute = vi.fn(() => count() > 0);
+  const seen: boolean[] = [];
+
+  const isPositive = createMemo(compute);
+  createEffect(() => {
+    seen.push(isPositive());
+  });
+
+  expect(compute).toHaveBeenCalledTimes(1);
+  expect(seen).toEqual([true]);
+
+  // 1 -> 2 会让 memo 重算一次，但结果仍为 true，不应再次唤醒下游 effect。
+  setCount(2);
+  expect(compute).toHaveBeenCalledTimes(2);
+  expect(seen).toEqual([true]);
+
+  // 2 -> 0 结果变为 false，下游 effect 才会收到通知。
+  setCount(0);
+  expect(compute).toHaveBeenCalledTimes(3);
+  expect(seen).toEqual([true, false]);
+});
+
+it.skip("支持链式 createMemo 组合派生，同值截断会阻断整条下游链路", () => {
+  const [todos, setTodos] = createSignal([
+    { id: 1, completed: true },
+    { id: 2, completed: false },
+  ]);
+  const computeRemaining = vi.fn(() => todos().filter((item) => !item.completed).length);
+  const computeSummary = vi.fn(() => `剩余 ${remaining()} 项`);
+  const seen: string[] = [];
+
+  const remaining = createMemo(computeRemaining);
+  const summary = createMemo(computeSummary);
+  createEffect(() => {
+    seen.push(summary());
+  });
+
+  expect(seen).toEqual(["剩余 1 项"]);
+  expect(computeRemaining).toHaveBeenCalledTimes(1);
+  expect(computeSummary).toHaveBeenCalledTimes(1);
+
+  // 仅调换数组顺序：remaining 重算但结果仍为 1，summary 与下游 effect 都不应重跑。
+  setTodos([...todos()].reverse());
+  expect(computeRemaining).toHaveBeenCalledTimes(2);
+  expect(computeSummary).toHaveBeenCalledTimes(1);
+  expect(seen).toEqual(["剩余 1 项"]);
+
+  // 再新增一条未完成任务：整条链路才顺次更新。
+  setTodos([...todos(), { id: 3, completed: false }]);
+  expect(computeRemaining).toHaveBeenCalledTimes(3);
+  expect(computeSummary).toHaveBeenCalledTimes(2);
+  expect(seen).toEqual(["剩余 1 项", "剩余 2 项"]);
+});
+
+it.skip("所属 createRoot 释放后，createMemo 自动停止响应上游变化", () => {
+  const [count, setCount] = createSignal(0);
+  const compute = vi.fn(() => count() * 2);
+
+  const { memo, dispose } = createRoot((disposeRoot) => ({
+    memo: createMemo(compute),
+    dispose: disposeRoot,
+  }));
+
+  expect(memo()).toBe(0);
+  expect(compute).toHaveBeenCalledTimes(1);
+
+  setCount(1);
+  expect(memo()).toBe(2);
+  expect(compute).toHaveBeenCalledTimes(2);
+
+  // 释放所属作用域后，memo 内部 effect 退订，上游再变也不重算，读值停留在最后缓存。
+  dispose();
+  setCount(2);
+  expect(compute).toHaveBeenCalledTimes(2);
+  expect(memo()).toBe(2);
+});
+
+it.skip("createMemo 首次求值读值后抛错会清理半截订阅并原样重抛", () => {
+  const [count, setCount] = createSignal(0);
+  const compute = vi.fn(() => {
+    count();
+    throw new Error("memo boom");
+  });
+
+  expect(() => createMemo(compute)).toThrow("memo boom");
+  expect(compute).toHaveBeenCalledTimes(1);
+
+  setCount(1);
+  expect(compute).toHaveBeenCalledTimes(1);
 });
 
 it("清理回调抛错时仍释放兄弟 effect 和父作用域", () => {

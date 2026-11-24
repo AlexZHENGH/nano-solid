@@ -226,6 +226,18 @@ export function createEffect(callback: EffectCallback): Dispose {
 }
 
 /**
+ * 创建一个带缓存的派生状态：依赖变化时重新计算，仅当新旧结果按 Object.is 不同时通知下游，并随当前 Owner 自动释放。
+ *
+ * @param compute 读取上游 signal 并返回派生结果的纯计算函数。
+ * @returns 读取当前缓存值的 getter（在 effect 内读取时会订阅该派生状态）。
+ */
+export function createMemo<T>(compute: () => T): () => T {
+  // 用内部 signal 存缓存值，并用 createEffect 驱动重算；首次执行先初始化缓存，后续通过 set 复用 Object.is 同值截断。
+  // TODO: 在 createEffect 中调用 compute()，首次执行用 createSignal(next) 初始化 [get, set]，后续调用 set(next)，最后返回 () => get()。
+  return compute;
+}
+
+/**
  * 把值留在一次调用独有的闭包里，交给同一组读写函数访问。
  *
  * @param initialValue 创建时保存的初始值，也决定读写函数使用的类型。
