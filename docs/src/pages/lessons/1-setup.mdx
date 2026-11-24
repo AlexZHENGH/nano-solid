@@ -1,0 +1,119 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "1. 配置项目"
+description: "切出练习分支，跑通程序和测试，再改一行代码让跳过的测试通过。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+这节课先跑通练习流程。你会在终端看到一行问候语，再改掉这句话，用测试确认程序确实打印了新内容。后面每次给框架加功能，也会按这个顺序验证改动。
+
+## 准备教学代码库
+
+请先确保你的系统已安装 Git、Node.js 24 和 pnpm 12.21.0，依赖库版本及环境配置请见 [nano-solid 仓库 README.md](https://github.com/AlexZHENGH/nano-solid/blob/1-learn/README.md#配置环境)。
+
+第一次做练习，请先克隆代码至本地。
+
+```sh
+# 从 GitHub 下载课程仓库，包括各课的练习和解答标签。
+git clone https://github.com/AlexZHENGH/nano-solid.git
+cd nano-solid
+```
+
+接着从这节课的起始标签 `1-learn` 切出练习分支，再安装这份代码对应的依赖。
+
+```sh
+# 从题目快照开自己的分支，接下来的改动都留在 solve/1 上。
+git switch -c solve/1 1-learn
+
+# 按当前快照的锁文件安装依赖。
+pnpm install --frozen-lockfile
+```
+
+`1-learn` 指向这节课的题目提交。`solve/1` 从那里起步，接下来可以在自己的分支里改代码和提交。先切分支再安装，是因为每个快照都有对应的 `pnpm-lock.yaml`。`--frozen-lockfile` 会按这份锁文件安装，遇到配置和锁文件对不上时会报错。
+
+## 先跑一次程序
+
+在仓库根目录跑一次程序，看看它会打印什么：
+
+```sh
+pnpm dev
+```
+
+终端会打印一行问候语，然后退出：
+
+```text
+Hello!
+```
+
+这行文字从哪来？打开根目录的 `package.json`，看里面的 `scripts`：
+
+```jsonc
+{
+  "scripts": {
+    "dev": "node src/main.ts",
+    // ... 其他脚本会在后续章节用到时再介绍。
+    "test:run": "vitest run",
+  },
+}
+```
+
+左边是在终端敲的命令名，右边是 pnpm 实际执行的命令。跑 `pnpm dev` 时，pnpm 会执行 `node src/main.ts`。Node 24 可以直接跑 TypeScript 文件，不用每次先编译再运行。
+
+再打开 `src/main.ts`，里面现在就一行代码：
+
+```ts
+// 把问候语写到标准输出，方便从终端和测试里观察。
+console.log("Hello!");
+```
+
+## 再跑一次测试
+
+刚才我们靠肉眼看终端输出确认结果。后面代码多了，不可能每次改完都手动挨个检查，所以这门课从一开始就用测试来核对。跑一下 `scripts` 里的另一条命令：
+
+```sh
+pnpm test:run
+```
+
+Vitest 会找到 `src/setup.test.ts` 并跑一遍，终端会显示 1 条测试通过、1 条跳过（skipped）。
+
+打开 `src/setup.test.ts`，里面已经写好了两条用例：
+
+```ts
+it("能在 Node 中直接运行 TypeScript 入口", () => {
+  // 先确认程序可以启动并打印内容，改问候语时这个检查仍然有效。
+  expect(readStartupMessage()).not.toBe("");
+});
+
+it.skip("入口打印新的问候语", () => {
+  // 比较程序实际打印的文字，漏改内容或标点时让测试失败。
+  expect(readStartupMessage()).toBe("Building my own nano-solid!");
+});
+```
+
+文件上方的 `readStartupMessage()` 是个辅助函数，它会像 `pnpm dev` 一样用 Node 跑一遍 `src/main.ts`，拿到终端输出并去掉末尾换行。第一条测试只检查输出不为空，确认程序能跑通。第二条用 `it.skip` 暂时跳过，里面已经写明了本课期待的新输出。
+
+> [!NOTE]
+> `src/setup.test.ts` 用到了 Node 的 `process.execPath`。它能过编辑器和 `pnpm typecheck` 的类型检查，是因为 `tsconfig.json` 覆盖了 `src/` 下的全部 `.ts` 文件（包括测试），并且配了 `"types": ["node"]`。如果直接在这里排除 `*.test.ts`，编辑器打开测试文件时套不上这份配置，就会报 `Cannot find name 'process'`。所以构建时跳过测试的配置单独写在 `tsconfig.build.json` 里，只在跑 `pnpm build` 时生效。
+
+## 后面每课的练习节奏
+
+从这课起，后面每一节都按同一套步骤推进，后续页面不再重复说明：
+
+1. 用练习框里的 `git switch -c solve/...` 切出自己的练习分支。
+2. 跑一次 `pnpm dev` 看起手现象，再把测试文件里本节新增用例的 `it.skip` 改成 `it`，跑 `pnpm test:run` 亲眼看到它失败。
+3. 打开源码，按代码里的 `// TODO` 补齐实现。如果函数上方有 `// oxlint-disable-next-line` 占位批注，补完后一并删掉。
+4. 运行 `pnpm format && pnpm check && pnpm test:run`，确认格式化、静态检查、类型检查和测试全部通过，再把改动提交到自己的练习分支。
+
+如果你想在本地看课，可以按 [README.md 的“打开课程文档”](https://github.com/AlexZHENGH/nano-solid/blob/1-learn/README.md#打开课程文档) 启动 `pnpm docs:dev`。让它继续运行，再用另一个终端切换快照，浏览器就会刷新当前页。
+
+> [!PRACTICE]
+> 如果还没切出练习分支，先运行下面这行（前面刚切过可跳过）：
+>
+> ```sh
+> git switch -c solve/1 1-learn
+> ```
+>
+> 启用 `src/setup.test.ts` 中被跳过的测试，修改 `src/main.ts` 让 `pnpm dev` 打印 `Building my own nano-solid!`，并确保 `pnpm format && pnpm check && pnpm test:run` 全部通过。
+
+<LessonSolution slug="1-setup" tag="1-solution" />

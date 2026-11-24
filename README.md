@@ -31,9 +31,12 @@ setCount(2);
 node --version
 pnpm --version
 
-# 下载课程仓库，进入项目目录并安装依赖。
+# 下载课程仓库，进入项目目录。
 git clone https://github.com/AlexZHENGH/nano-solid.git
 cd nano-solid
+
+# 先检出第一章的起始快照，再按这份快照的锁文件安装依赖。
+git switch --detach 1-learn
 pnpm install --frozen-lockfile
 ```
 
@@ -46,7 +49,7 @@ pnpm install --frozen-lockfile
 pnpm docs:dev
 ```
 
-让 `pnpm docs:dev` 一直跑着，另开一个终端进入同一个仓库跟着章节做练习。要生成静态站点时，运行 `pnpm docs:build`，HTML 文件会放在 `docs/dist/`。
+从首页打开“1. 配置项目”，让 `pnpm docs:dev` 一直跑着。另开一个终端，进入同一个仓库，跟着章节做练习。要生成静态站点时，运行 `pnpm docs:build`，HTML 文件会放在 `docs/dist/`。
 
 ## 更新课程内容
 

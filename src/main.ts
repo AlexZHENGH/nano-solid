@@ -1,2 +1,2 @@
-// 运行入口只演示当前小节要观察的变化。
-console.log("Hello from nano-solid");
+// 把问候语写到标准输出，方便从终端和测试里观察。
+console.log("Hello!");

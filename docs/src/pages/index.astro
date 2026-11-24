@@ -1,5 +1,9 @@
 ---
 import BookLayout from "../layouts/BookLayout.astro";
+import { frontmatter as setup } from "./lessons/1-setup.mdx";
+
+/** 首页两处入口共用同一条路径，并保留站点的部署前缀。 */
+const setupUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/lessons/1-setup/`;
 ---
 
 <BookLayout
@@ -32,9 +36,13 @@ import BookLayout from "../layouts/BookLayout.astro";
       </li>
     </ul>
 
-    <p>练习时先运行题目里的例子，动手修改，再用测试和解答核对结果。</p>
+    <p>
+      练习时先运行题目里的例子，动手修改，再用测试和解答核对结果。
+      从 <a href={setupUrl}>{setup.title}</a> 开始。
+    </p>
   </section>
 
   <h2 id="lessons">课程目录</h2>
-  <p>课程章节会随着后续小节逐步加入。</p>
+  <!-- 从题目页读取章名，让目录和正文使用同一个标题。 -->
+  <h3 class="course-chapter"><a href={setupUrl}>{setup.title}</a></h3>
 </BookLayout>
