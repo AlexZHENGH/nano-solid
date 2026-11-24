@@ -12,6 +12,7 @@ import { frontmatter as disposeEffect } from "./lessons/3.3-dispose.mdx";
 import { frontmatter as throwCleanup } from "./lessons/3.4-throw-cleanup.mdx";
 import { frontmatter as domRenderer } from "./lessons/4.0-dom-renderer.mdx";
 import { frontmatter as browserVite } from "./lessons/4.1-browser-vite.mdx";
+import { frontmatter as reactiveText } from "./lessons/4.2-reactive-text.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -28,6 +29,7 @@ const disposeEffectUrl = `${baseUrl}/lessons/3.3-dispose/`;
 const throwCleanupUrl = `${baseUrl}/lessons/3.4-throw-cleanup/`;
 const domRendererUrl = `${baseUrl}/lessons/4.0-dom-renderer/`;
 const browserViteUrl = `${baseUrl}/lessons/4.1-browser-vite/`;
+const reactiveTextUrl = `${baseUrl}/lessons/4.2-reactive-text/`;
 ---
 
 <BookLayout
@@ -85,5 +87,6 @@ const browserViteUrl = `${baseUrl}/lessons/4.1-browser-vite/`;
   <h3 class="course-chapter"><a href={domRendererUrl}>{domRenderer.title}</a></h3>
   <ul class="course-lessons">
     <li><a href={browserViteUrl}>{browserVite.title}</a></li>
+    <li><a href={reactiveTextUrl}>{reactiveText.title}</a></li>
   </ul>
 </BookLayout>
