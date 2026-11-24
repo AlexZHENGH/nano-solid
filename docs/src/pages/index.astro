@@ -10,6 +10,7 @@ import { frontmatter as sameValue } from "./lessons/3.1-same-value.mdx";
 import { frontmatter as dynamicDependencies } from "./lessons/3.2-dynamic-dependencies.mdx";
 import { frontmatter as disposeEffect } from "./lessons/3.3-dispose.mdx";
 import { frontmatter as throwCleanup } from "./lessons/3.4-throw-cleanup.mdx";
+import { frontmatter as domRenderer } from "./lessons/4.0-dom-renderer.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -24,6 +25,7 @@ const sameValueUrl = `${baseUrl}/lessons/3.1-same-value/`;
 const dynamicDependenciesUrl = `${baseUrl}/lessons/3.2-dynamic-dependencies/`;
 const disposeEffectUrl = `${baseUrl}/lessons/3.3-dispose/`;
 const throwCleanupUrl = `${baseUrl}/lessons/3.4-throw-cleanup/`;
+const domRendererUrl = `${baseUrl}/lessons/4.0-dom-renderer/`;
 ---
 
 <BookLayout
@@ -78,4 +80,5 @@ const throwCleanupUrl = `${baseUrl}/lessons/3.4-throw-cleanup/`;
     <li><a href={disposeEffectUrl}>{disposeEffect.title}</a></li>
     <li><a href={throwCleanupUrl}>{throwCleanup.title}</a></li>
   </ul>
+  <h3 class="course-chapter"><a href={domRendererUrl}>{domRenderer.title}</a></h3>
 </BookLayout>

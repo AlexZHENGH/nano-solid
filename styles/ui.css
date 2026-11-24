@@ -1,0 +1,112 @@
+/* 文档站 HTML 演示与 nano-solid 示例应用共用的组件样式（仅使用 .ns-* 类名，不修改全局标签样式）。 */
+.ns-card {
+  padding: 1.15rem 1.25rem;
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-lg);
+  background: var(--ns-surface);
+  color: var(--ns-ink);
+  font-family: var(--ns-font-sans);
+}
+.ns-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+.ns-card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ns-ink-strong);
+}
+.ns-badge {
+  display: inline-block;
+  padding: 0.14rem 0.55rem;
+  border: 1px solid var(--ns-border-soft);
+  border-radius: 999px;
+  background: var(--ns-accent-soft);
+  color: var(--ns-accent-hover);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.ns-badge-muted {
+  border-color: var(--ns-border);
+  background: var(--ns-surface-raised);
+  color: var(--ns-subtle);
+}
+.ns-counter-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 0 0 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-md);
+  background: var(--ns-surface-raised);
+}
+.ns-counter-label {
+  font-size: 0.88rem;
+  color: var(--ns-muted);
+}
+.ns-counter-value {
+  font: 700 1.5rem var(--ns-font-mono);
+  color: var(--ns-accent);
+  font-variant-numeric: tabular-nums;
+}
+.ns-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.ns-btn {
+  padding: 0.42rem 0.85rem;
+  border: 1px solid var(--ns-border-strong);
+  border-radius: var(--ns-radius-md);
+  background: var(--ns-surface-raised);
+  color: var(--ns-ink);
+  font-family: var(--ns-font-sans);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ns-btn:hover:not(:disabled) {
+  background: var(--ns-surface-hover);
+}
+.ns-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+.ns-btn-danger {
+  border-color: var(--ns-danger-border);
+  color: var(--ns-danger);
+}
+.ns-btn-danger:hover:not(:disabled) {
+  background: var(--ns-danger-bg);
+}
+.ns-divider {
+  margin-block: 0.95rem;
+  border: 0;
+  border-top: 1px solid var(--ns-border);
+}
+.ns-empty {
+  margin: 0 0 0.9rem;
+  padding: 0.95rem 1rem;
+  border: 1px dashed var(--ns-border-strong);
+  border-radius: var(--ns-radius-md);
+  background: var(--ns-surface-raised);
+  color: var(--ns-subtle);
+  font-size: 0.9rem;
+  text-align: center;
+}
+.ns-meta {
+  margin: 0.75rem 0 0;
+  font-size: 0.84rem;
+  color: var(--ns-muted);
+}
+.ns-meta code {
+  font-family: var(--ns-font-mono);
+  font-size: 0.88em;
+}

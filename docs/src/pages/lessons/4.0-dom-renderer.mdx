@@ -1,0 +1,26 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "4. 最小 DOM 渲染器"
+description: "把响应式内核接入浏览器，封装响应式文本、元素树递归释放与 render 挂载卸载。"
+---
+
+import DomCounterDemo from "../../components/DomCounterDemo";
+
+前三章我们一直在终端里观察 `console.log`，现在响应式内核已经具备同值跳过、动态依赖重建、释放句柄和异常清理。从这一章开始，我们离开终端，把 `createSignal` 和 `createEffect` 接到真正的浏览器 DOM 上。
+
+先试着操作下面这个网页计数器：点几次 `+1`、`-1`、`重置`，观察数字和底部的“响应式文本更新次数”。接着点 `调用 dispose() 卸载`，再点 `外部写入 setCount(...)`，看看信号值变化时已经卸载的文本节点还会不会继续更新：
+
+<DomCounterDemo mode="overview" label="第四章预期效果：响应式 HTML 计数器与挂载卸载" client:load />
+
+从上面能看到最小 DOM 渲染器要解决的三件事：
+
+1. **只更新变化的文本节点**：点击 `+1` 时不需要重建整段 HTML，只修改那一个 `Text` 节点的 `.data`。
+2. **节点和清理成对传递**：每个可渲染节点都同时带着 DOM 节点和自己的 `dispose` 函数，父节点释放时能顺着树递归释放所有子节点。
+3. **挂载与卸载对称**：`render(view, container)` 把节点放进容器，返回一个幂等的卸载函数。卸载后不仅把 DOM 从页面移除，还会彻底停止背后所有订阅。
+
+这一章分四小节把整条链路搭起来：
+
+- **4.1 接入浏览器与 Vite**：用根目录 `index.html` 和 Vite 跑起浏览器页面，先手写原生 DOM 计数器，感受手工绑定和清理的痛点。
+- **4.2 响应式文本节点**：把动态文本抽成 `createReactiveText`，在 `jsdom` 测试里验证同一 `Text` 节点的原地更新与释放。
+- **4.3 组合元素树与递归释放**：把静态文本和元素统一成 `Renderable`，用 `createRenderableElement` 自动级联释放子树。
+- **4.4 挂载与幂等卸载**：实现 `render(renderable, container)`，把整棵树挂载到容器，并在卸载时同时清理订阅和移除 DOM。
