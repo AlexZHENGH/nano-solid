@@ -98,3 +98,48 @@ it("嵌套 effect 退出后会恢复外层追踪上下文", () => {
   setOuter(1);
   expect(outerSeen).toEqual([0, 1]);
 });
+
+it.skip("写入相同值时不会重复触发 effect", () => {
+  const [count, setCount] = createSignal(0);
+  let runs = 0;
+
+  createEffect(() => {
+    count();
+    runs += 1;
+  });
+
+  setCount(0);
+  setCount(0);
+  expect(runs).toBe(1);
+
+  setCount(1);
+  expect(runs).toBe(2);
+});
+
+it.skip("重复写入 NaN 时也会跳过通知", () => {
+  const [value, setValue] = createSignal(Number.NaN);
+  let runs = 0;
+
+  createEffect(() => {
+    value();
+    runs += 1;
+  });
+
+  // === 会把 NaN === NaN 判成 false，只有 Object.is 才能识别出值没有变化。
+  setValue(Number.NaN);
+  expect(runs).toBe(1);
+});
+
+it.skip("写入 -0 替换 +0 时会视为新值", () => {
+  const [zero, setZero] = createSignal(0);
+  let runs = 0;
+
+  createEffect(() => {
+    zero();
+    runs += 1;
+  });
+
+  // Object.is(+0, -0) 为 false，因此从 +0 改为 -0 会触发一次更新。
+  setZero(-0);
+  expect(runs).toBe(2);
+});

@@ -4,5 +4,5 @@ import { createEffect, createSignal } from "./reactive.ts";
 const [count, setCount] = createSignal(0);
 
 createEffect(() => console.log(count()));
+setCount(0);
 setCount(1);
-setCount(2);

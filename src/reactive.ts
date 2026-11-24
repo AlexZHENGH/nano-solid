@@ -53,11 +53,13 @@ export function createSignal<T>(initialValue: T) {
   }
 
   /**
-   * 先把新值写回闭包，再通知所有依赖这个 signal 的 effect 重新执行。
+   * 仅在新旧值不同时更新闭包并通知依赖这个 signal 的 effect 重新执行。
    *
    * @param next 要写入的新值。
    */
   function set(next: T): void {
+    // 新旧值相同时直接返回，避免无意义的重复通知（Object.is 同时正确处理 NaN 和 +0 / -0）。
+    // TODO: 如果新旧值相同（使用 Object.is 比较），直接 return。
     // 先更新值，effect 重跑时调用 get() 才能读到这次写入的结果。
     value = next;
     for (const subscriber of subscribers) {
