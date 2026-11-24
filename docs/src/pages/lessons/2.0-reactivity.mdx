@@ -1,0 +1,40 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "2. 最小响应式系统"
+description: "用 createSignal 保存状态，再用 createEffect 自动追踪读取并在写入后重跑。"
+---
+
+import ReactivityConsoleDemo from "../../components/ReactivityConsoleDemo";
+
+上一章我们配好了项目，也走通了“改代码、跑程序、跑测试”的循环。从这一章开始，我们正式动手写响应式系统的核心：`createSignal` 和 `createEffect`。
+
+先点一下下面的 `调用 setCount(1)`，再点 `调用 setCount(2)`。代码里并没有多写任何 `console.log`，但下方的 Console 自己依次多出了 `1` 和 `2`。
+
+<ReactivityConsoleDemo
+  mode="effect"
+  label="第二章预期效果：写入 signal 后自动输出日志"
+  client:load
+/>
+
+`setCount` 只知道新值是多少，并没有直接调用打印函数。那打印函数是怎么知道自己该再跑一遍的？
+
+这一章我们就亲手把这件事做出来。先用 `createSignal` 留住一个值，再用 `createEffect` 把“读过这个值”和“值变了就重跑”连起来。学完后，你写的框架就能在终端跑通下面这段代码，依次打印 `0`、`1`、`2`：
+
+```ts
+// 创建一份响应式状态：count 用来读取，setCount 用来更新。
+const [count, setCount] = createSignal(0);
+
+// 首次运行会打印 0，之后每次写入 count 都会自动重跑。
+createEffect(() => console.log(count()));
+
+setCount(1);
+setCount(2);
+```
+
+整章分三小步推进：
+
+- **2.1 用闭包保存值**：实现最小版本的 `createSignal`，让写入真的改变后续读到的值。
+- **2.2 写入时通知订阅者**：先手动登记回调，看清楚 setter 怎么通知关心它的函数。
+- **2.3 让 effect 自动追踪依赖**：去掉手动登记，让 getter 在读值时自己记下正在运行的 effect。
+
+上面的交互演示由真正的 SolidJS 驱动。做到 `2.3` 结束时，在本地跑 `pnpm dev`，你会用自己写的框架看到一模一样的结果。

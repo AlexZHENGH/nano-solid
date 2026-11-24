@@ -1,9 +1,13 @@
 ---
 import BookLayout from "../layouts/BookLayout.astro";
 import { frontmatter as setup } from "./lessons/1-setup.mdx";
+import { frontmatter as reactivity } from "./lessons/2.0-reactivity.mdx";
 
-/** 首页两处入口共用同一条路径，并保留站点的部署前缀。 */
-const setupUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/lessons/1-setup/`;
+/** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
+/** 首页两处入口共用同一条路径。 */
+const setupUrl = `${baseUrl}/lessons/1-setup/`;
+const reactivityUrl = `${baseUrl}/lessons/2.0-reactivity/`;
 ---
 
 <BookLayout
@@ -45,4 +49,5 @@ const setupUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/lessons/1-setup
   <h2 id="lessons">课程目录</h2>
   <!-- 从题目页读取章名，让目录和正文使用同一个标题。 -->
   <h3 class="course-chapter"><a href={setupUrl}>{setup.title}</a></h3>
+  <h3 class="course-chapter"><a href={reactivityUrl}>{reactivity.title}</a></h3>
 </BookLayout>
