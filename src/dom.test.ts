@@ -7,6 +7,7 @@ import {
   createRenderableElement,
   createStaticText,
   mount,
+  render,
 } from "./dom.ts";
 import { createSignal } from "./reactive.ts";
 
@@ -124,5 +125,64 @@ describe("元素树与递归释放", () => {
       empty.dispose();
       empty.dispose();
     }).not.toThrow();
+  });
+});
+
+describe("render 挂载与卸载", () => {
+  it.skip("挂载后卸载只移除本次挂载的节点，且重复调用保持安全", () => {
+    const container = createElement("div");
+    const sibling = createElement("span");
+    sibling.textContent = "兄弟节点";
+    mount(container, sibling);
+
+    const view = createRenderableElement("p", [createStaticText("Hello nano-solid")]);
+    const unmount = render(view, container);
+
+    expect(container.childNodes.length).toBe(2);
+    expect(container.textContent).toBe("兄弟节点Hello nano-solid");
+
+    unmount();
+    // 卸载只移除本次挂载的 view.node，不应误删容器里原有的兄弟节点。
+    expect(container.childNodes.length).toBe(1);
+    expect(container.firstChild).toBe(sibling);
+
+    expect(() => unmount()).not.toThrow();
+    expect(container.childNodes.length).toBe(1);
+  });
+
+  it.skip("卸载时同步释放子树订阅，已移除的文本节点不再随 signal 更新", () => {
+    const container = createElement("div");
+    const [count, setCount] = createSignal(0);
+    const getValue = vi.fn(() => String(count()));
+
+    const reactiveText = createReactiveText(getValue);
+    const view = createRenderableElement("p", [reactiveText]);
+    const unmount = render(view, container);
+
+    expect(container.textContent).toBe("0");
+
+    setCount(1);
+    expect(container.textContent).toBe("1");
+
+    unmount();
+    setCount(2);
+
+    // 保留对已移除 Text 节点的引用，验证它没有在后台继续被 effect 更新。
+    expect(container.textContent).toBe("");
+    expect(reactiveText.node.data).toBe("1");
+    expect(getValue).toHaveBeenCalledTimes(2);
+  });
+
+  it.skip("重复调用卸载函数时只执行一次底层 dispose", () => {
+    const container = createElement("div");
+    const dispose = vi.fn();
+    const view = { node: createElement("div"), dispose };
+
+    const unmount = render(view, container);
+    unmount();
+    unmount();
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(container.childNodes.length).toBe(0);
   });
 });

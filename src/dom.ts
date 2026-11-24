@@ -93,3 +93,22 @@ export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
 
   return { node, dispose };
 }
+
+/**
+ * 将一个 Renderable 挂载到指定容器，并返回幂等的卸载函数：卸载时同时释放子树订阅并移除 DOM 节点。
+ *
+ * @param renderable 待挂载的根 Renderable 节点。
+ * @param container 挂载目标容器节点。
+ * @returns 调用后释放全部订阅并把根节点从容器移除的卸载函数。
+ */
+export function render(renderable: Renderable<Node>, container: Node): Dispose {
+  mount(container, renderable.node);
+
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  let disposed = false;
+
+  return () => {
+    // 卸载函数必须幂等，先释放整棵树的响应式订阅与事件监听，再只把本次挂载的根节点从父节点移除。
+    // TODO: 若 disposed 为 true 直接返回，否则置为 true，调用 renderable.dispose() 并移除 renderable.node。
+  };
+}

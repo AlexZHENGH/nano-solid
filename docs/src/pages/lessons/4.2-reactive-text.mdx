@@ -42,7 +42,7 @@ flowchart LR
 因为 [3.3](../3.3-dispose/) 已经保证了 `createEffect` 返回的 `dispose` 是幂等的，调用 `binding.dispose()` 一次或多次都会安全断开订阅，文本内容会停留在释放前的最后一次值。
 
 > [!NOTE]
-> 在这一节的最后一条测试里可以看到：把节点从 DOM 移走（`parent.remove()`）和调用 `binding.dispose()` 目前还是两步分开的操作。如果不调 `dispose()`，被移走的 `Text` 节点虽然已经看不见了，但只要有闭包引用着它，背后的 effect 依然会在每次写入时白跑。[4.3](../4.3-renderable-tree/) 和 4.4 会把节点树和挂载卸载彻底收口起来。
+> 在这一节的最后一条测试里可以看到：把节点从 DOM 移走（`parent.remove()`）和调用 `binding.dispose()` 目前还是两步分开的操作。如果不调 `dispose()`，被移走的 `Text` 节点虽然已经看不见了，但只要有闭包引用着它，背后的 effect 依然会在每次写入时白跑。[4.3](../4.3-renderable-tree/) 和 [4.4](../4.4-render-unmount/) 会把节点树和挂载卸载彻底收口起来。
 
 > [!PRACTICE]
 >

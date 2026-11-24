@@ -14,6 +14,7 @@ import { frontmatter as domRenderer } from "./lessons/4.0-dom-renderer.mdx";
 import { frontmatter as browserVite } from "./lessons/4.1-browser-vite.mdx";
 import { frontmatter as reactiveText } from "./lessons/4.2-reactive-text.mdx";
 import { frontmatter as renderableTree } from "./lessons/4.3-renderable-tree.mdx";
+import { frontmatter as renderUnmount } from "./lessons/4.4-render-unmount.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -32,6 +33,7 @@ const domRendererUrl = `${baseUrl}/lessons/4.0-dom-renderer/`;
 const browserViteUrl = `${baseUrl}/lessons/4.1-browser-vite/`;
 const reactiveTextUrl = `${baseUrl}/lessons/4.2-reactive-text/`;
 const renderableTreeUrl = `${baseUrl}/lessons/4.3-renderable-tree/`;
+const renderUnmountUrl = `${baseUrl}/lessons/4.4-render-unmount/`;
 ---
 
 <BookLayout
@@ -91,5 +93,6 @@ const renderableTreeUrl = `${baseUrl}/lessons/4.3-renderable-tree/`;
     <li><a href={browserViteUrl}>{browserVite.title}</a></li>
     <li><a href={reactiveTextUrl}>{reactiveText.title}</a></li>
     <li><a href={renderableTreeUrl}>{renderableTree.title}</a></li>
+    <li><a href={renderUnmountUrl}>{renderUnmount.title}</a></li>
   </ul>
 </BookLayout>
