@@ -1,16 +1,13 @@
 {
   "compilerOptions": {
-    // 使用 Node 的 ESM 解析规则和类型，配合 package.json 的 type: module。
+    // 浏览器应用交给 Vite 打包输出，TypeScript 只负责静态类型检查。
+    "noEmit": true,
+
+    // 保留显式 .ts 相对导入写法，同时让 Vite 和 Vitest 直接解析源码。
     "module": "nodenext",
-    // Node 直接运行 .ts 源码，tsc 构建时再把相对导入后缀改写为 .js。
     "rewriteRelativeImportExtensions": true,
     "target": "esnext",
     "types": ["node"],
-
-    // 生成类型声明和源映射，便于检查编译产物与源码的对应关系。
-    "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
 
     // 让 TypeScript 检查可能不存在的值，以及可选属性的赋值。
     "strict": true,
@@ -27,6 +24,5 @@
     "skipLibCheck": true
   },
   // 覆盖当前快照的源码、测试和仓库工具，供编辑器和 pnpm typecheck 检查。
-  // 构建时由 tsconfig.build.json 排除测试文件。
   "include": ["scripts/**/*.ts", "src/**/*.ts"]
 }

@@ -20,7 +20,7 @@ import DomCounterDemo from "../../components/DomCounterDemo";
 
 这一章分四小节把整条链路搭起来：
 
-- **4.1 接入浏览器与 Vite**：用根目录 `index.html` 和 Vite 跑起浏览器页面，先手写原生 DOM 计数器，感受手工绑定和清理的痛点。
+- **[4.1 接入浏览器与 Vite](../4.1-browser-vite/)**：用根目录 `index.html` 和 Vite 跑起浏览器页面，先手写原生 DOM 计数器，感受手工绑定和清理的痛点。
 - **4.2 响应式文本节点**：把动态文本抽成 `createReactiveText`，在 `jsdom` 测试里验证同一 `Text` 节点的原地更新与释放。
 - **4.3 组合元素树与递归释放**：把静态文本和元素统一成 `Renderable`，用 `createRenderableElement` 自动级联释放子树。
 - **4.4 挂载与幂等卸载**：实现 `render(renderable, container)`，把整棵树挂载到容器，并在卸载时同时清理订阅和移除 DOM。

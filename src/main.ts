@@ -1,21 +1,7 @@
-// 运行入口用来观察当前小节的终端输出。
-import { createEffect, createSignal } from "./reactive.ts";
+// 浏览器入口：为 index.html 中的计数器骨架绑定响应式状态与事件。
+import { mountCounter } from "./counter.ts";
 
-const [count, setCount] = createSignal(0);
-
-try {
-  createEffect(() => {
-    const current = count();
-    console.log("effect run:", current);
-    throw new Error("boom");
-  });
-} catch (error) {
-  console.log("caught:", (error as Error).message);
-}
-
-try {
-  setCount(1);
-  console.log("setCount(1) ok");
-} catch (error) {
-  console.log("setCount(1) failed:", (error as Error).message);
+const app = document.querySelector<HTMLElement>("#app");
+if (app) {
+  mountCounter(app);
 }

@@ -1,0 +1,58 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "4.1 接入浏览器与 Vite"
+description: "引入根目录 index.html、Vite 与 jsdom，先手写原生 DOM 计数器，体会手工绑定的繁琐。"
+---
+
+import DomCounterDemo from "../../components/DomCounterDemo";
+import LessonSolution from "../../components/LessonSolution.astro";
+
+在真正设计 DOM 渲染器之前，我们先用最朴素的原生 DOM API 把 `createSignal` 和 `createEffect` 接到浏览器页面上。亲手写过一遍，后面几节为什么需要 `createReactiveText`、`Renderable` 和 `render` 就会非常清楚。
+
+## 浏览器入口与开发脚本
+
+本节起仓库根目录新增了 `index.html`，通过 `<script type="module" src="/src/main.ts"></script>` 加载代码，同时引入根目录共享的 `styles/tokens.css` 和 `styles/ui.css`，让页面风格和课程文档保持一致。
+
+`package.json` 的三条脚本也切换到 Vite 流程：
+
+- `pnpm dev`：运行 `vite`，启动带热更新的本地开发服务器。
+- `pnpm build`：先跑 `pnpm run typecheck` 做静态类型检查，再用 `vite build` 打包输出到 `dist/`。
+- `pnpm start`：运行 `vite preview`，在本地预览打包后的 `dist/` 产物。
+
+> [!NOTE]
+> Vite 默认直接以根目录 `index.html` 作为入口，现阶段不需要额外配置文件。因为不再靠 `tsc` 生成 `dist/main.js`，原先专供命令行构建的 `tsconfig.build.json` 也随之移除，`tsconfig.json` 加上 `"noEmit": true` 专职做类型检查。TypeScript 在 `target: "esnext"` 下默认包含 `DOM` 标准库，所以 `document`、`HTMLElement` 这些类型已经开箱可用。
+
+## 用 `jsdom` 测试 DOM 代码
+
+浏览器里的点击交互同样应该有自动化测试。我们在 `src/counter.test.ts` 顶部加了一行环境声明：
+
+```ts
+// @vitest-environment jsdom
+```
+
+这样只有涉及 DOM 的测试文件会启动 `jsdom` 模拟浏览器环境，`src/reactive.test.ts` 依然留在轻量的 Node 环境里运行，互不拖累。
+
+## 为什么把监听和释放成对写？
+
+打开 `src/counter.ts` 可以看到，`mountCounter(root)` 先用 `querySelector` 找出 `#counter` 和三个按钮，用 `createEffect` 把 `count()` 同步到 `counter.textContent`，并返回一个清理函数。
+
+给按钮绑点击事件时，推荐用 `addEventListener` 而不是 `button.onclick = ...`：一方面不会意外覆盖别人绑在同一节点上的监听，另一方面可以在清理函数里用 `removeEventListener` 成对移除，防止节点卸载或重复挂载后泄漏事件处理函数。
+
+你大概已经感受到手写版的麻烦了：每次加一个动态数字，就要查一次 DOM、写一个 `createEffect`、手动记住 `disposeEffect`，还要和事件清理拼在一起。下一节我们就开始把这些重复劳动抽进渲染器里。
+
+## 预期效果
+
+完成本节后，在浏览器里点 `+1`、`-1`、`重置` 应立即看到计数变化，和下面的演示一致：
+
+<DomCounterDemo mode="counter" label="4.1 预期效果：点击按钮更新计数" client:load />
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/4.1 4.1-learn
+> pnpm install --frozen-lockfile
+> ```
+>
+> 起手运行 `pnpm dev` 打开浏览器页面，可以看到计数停在 `0`，点击 `+1`、`-1`、`重置` 没有任何反应。补齐 `src/counter.ts` 中的按钮事件绑定与成对清理，让页面上的三个按钮都能正常工作，并确保 `pnpm format && pnpm check && pnpm test:run && pnpm build` 全部通过。
+
+<LessonSolution slug="4.1-browser-vite" tag="4.1-solution" />
