@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from "vitest";
-import { render } from "./dom.ts";
-import { jsx } from "./jsx-runtime.ts";
+import { render, type Renderable } from "./dom.ts";
+import { jsx, type JSXChild } from "./jsx-runtime.ts";
 import { createSignal } from "./reactive.ts";
 
 describe("JSX 运行时与子节点归一化", () => {
@@ -232,5 +232,196 @@ describe("响应式属性与构造失败回滚", () => {
     expect(readClass).toHaveBeenCalledTimes(1);
     setCls("b");
     expect(readClass).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("函数组件", () => {
+  it.skip("支持函数组件渲染，透传 props 与 children 并随卸载释放订阅", () => {
+    const container = document.createElement("div");
+    const [note, setNote] = createSignal("初始内容");
+    const readNote = vi.fn(() => note());
+
+    type CardProps = {
+      title: string;
+      children?: JSXChild;
+    };
+
+    function Card(props: CardProps): Renderable {
+      return (
+        <section class="ns-card">
+          <h2>{props.title}</h2>
+          <div>{props.children}</div>
+        </section>
+      );
+    }
+
+    const unmount = render(
+      <Card title="提示">
+        <p>{readNote}</p>
+      </Card>,
+      container,
+    );
+
+    expect(container.querySelector("h2")?.textContent).toBe("提示");
+    expect(container.querySelector("p")?.textContent).toBe("初始内容");
+    expect(readNote).toHaveBeenCalledTimes(1);
+
+    setNote("更新内容");
+    expect(container.querySelector("p")?.textContent).toBe("更新内容");
+    expect(readNote).toHaveBeenCalledTimes(2);
+
+    unmount();
+    setNote("卸载后写入");
+    expect(container.textContent).toBe("");
+    expect(readNote).toHaveBeenCalledTimes(2);
+  });
+
+  it.skip("组件函数只在创建时执行一次，点击加减与重置不会重跑组件", () => {
+    const container = document.createElement("div");
+    const onComponentRun = vi.fn();
+
+    function Counter(): Renderable {
+      onComponentRun();
+      const [count, setCount] = createSignal(0);
+
+      return (
+        <div>
+          <span
+            id="counter"
+            class={() =>
+              count() < 0 ? "ns-counter-value ns-counter-value-negative" : "ns-counter-value"
+            }
+          >
+            {() => count()}
+          </span>
+          <button id="increment" type="button" onClick={() => setCount(count() + 1)}>
+            +1
+          </button>
+          <button id="decrement" type="button" onClick={() => setCount(count() - 1)}>
+            -1
+          </button>
+          <button
+            id="reset"
+            type="button"
+            disabled={() => count() === 0}
+            onClick={() => setCount(0)}
+          >
+            重置
+          </button>
+        </div>
+      );
+    }
+
+    const unmount = render(<Counter />, container);
+    const counter = container.querySelector<HTMLSpanElement>("#counter")!;
+    const increment = container.querySelector<HTMLButtonElement>("#increment")!;
+    const decrement = container.querySelector<HTMLButtonElement>("#decrement")!;
+    const reset = container.querySelector<HTMLButtonElement>("#reset")!;
+
+    expect(counter.textContent).toBe("0");
+    expect(reset.disabled).toBe(true);
+    expect(onComponentRun).toHaveBeenCalledTimes(1);
+
+    // 连续点击 +1、-1、重置：文本、class 与 disabled 细粒度更新，组件函数始终只跑过 1 次。
+    increment.click();
+    increment.click();
+    expect(counter.textContent).toBe("2");
+    expect(reset.disabled).toBe(false);
+    expect(onComponentRun).toHaveBeenCalledTimes(1);
+
+    decrement.click();
+    decrement.click();
+    decrement.click();
+    expect(counter.textContent).toBe("-1");
+    expect(counter.className).toBe("ns-counter-value ns-counter-value-negative");
+    expect(onComponentRun).toHaveBeenCalledTimes(1);
+
+    reset.click();
+    expect(counter.textContent).toBe("0");
+    expect(counter.className).toBe("ns-counter-value");
+    expect(reset.disabled).toBe(true);
+    expect(onComponentRun).toHaveBeenCalledTimes(1);
+
+    // 卸载后再点击保留下来的按钮引用，既不更新 DOM 也不再触发回调。
+    unmount();
+    increment.click();
+    expect(counter.textContent).toBe("0");
+    expect(container.textContent).toBe("");
+    expect(onComponentRun).toHaveBeenCalledTimes(1);
+  });
+
+  it.skip("函数组件卸载时成对清理内部属性订阅、文本订阅与点击监听", () => {
+    const container = document.createElement("div");
+    const [count, setCount] = createSignal(0);
+    const readClass = vi.fn(() => (count() < 0 ? "neg" : "pos"));
+    const readDisabled = vi.fn(() => count() === 0);
+    const handleClick = vi.fn(() => setCount(count() + 1));
+
+    function ActionBox(): Renderable {
+      return (
+        <div class={readClass}>
+          <button id="act" type="button" disabled={readDisabled} onClick={handleClick}>
+            {() => count()}
+          </button>
+        </div>
+      );
+    }
+
+    const unmount = render(<ActionBox />, container);
+    const button = container.querySelector<HTMLButtonElement>("#act")!;
+
+    setCount(1);
+    expect(button.disabled).toBe(false);
+    button.click();
+    expect(count()).toBe(2);
+    expect(handleClick).toHaveBeenCalledTimes(1);
+
+    unmount();
+    const classCallsAfterUnmount = readClass.mock.calls.length;
+    const disabledCallsAfterUnmount = readDisabled.mock.calls.length;
+
+    // 卸载后外部写入信号与点击按钮均不再触发任何响应式读取或事件回调。
+    setCount(-1);
+    button.click();
+    expect(readClass).toHaveBeenCalledTimes(classCallsAfterUnmount);
+    expect(readDisabled).toHaveBeenCalledTimes(disabledCallsAfterUnmount);
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+
+  it.skip("多个同类型函数组件实例各自持有独立状态", () => {
+    const container = document.createElement("div");
+
+    type CounterItemProps = {
+      id: string;
+    };
+
+    function CounterItem(props: CounterItemProps): Renderable {
+      const [count, setCount] = createSignal(0);
+      return (
+        <div id={props.id}>
+          <span class="value">{() => count()}</span>
+          <button type="button" onClick={() => setCount(count() + 1)}>
+            +1
+          </button>
+        </div>
+      );
+    }
+
+    const unmount = render(
+      <div>
+        <CounterItem id="first" />
+        <CounterItem id="second" />
+      </div>,
+      container,
+    );
+
+    const first = container.querySelector<HTMLDivElement>("#first")!;
+    const second = container.querySelector<HTMLDivElement>("#second")!;
+
+    first.querySelector<HTMLButtonElement>("button")!.click();
+    expect(first.querySelector(".value")?.textContent).toBe("1");
+    expect(second.querySelector(".value")?.textContent).toBe("0");
+
+    unmount();
   });
 });

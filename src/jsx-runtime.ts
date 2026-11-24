@@ -25,6 +25,9 @@ export type Props = {
   children?: JSXChild;
 } & ElementProps;
 
+/** 函数组件类型：接收属性对象，在创建时执行一次并返回真实 DOM 的 Renderable。 */
+export type Component<P = Record<string, never>> = (props: P) => Renderable;
+
 /**
  * 运行时类型守卫：判断任意子节点值是否已经是 Renderable 对象。
  *
@@ -78,14 +81,23 @@ function normalizeChildren(children: JSXChild): Renderable[] {
 }
 
 /**
- * 自动 JSX 运行时入口：将单个原生 HTML 标签表达式转为真实 DOM 的 Renderable。
+ * 自动 JSX 运行时入口：将原生 HTML 标签或函数组件表达式转为真实 DOM 的 Renderable。
  *
- * @param tag HTML 标签名。
- * @param props 包含可选 children 的属性对象。
- * @returns 对应的元素 Renderable。
+ * @param tag HTML 标签名或函数组件。
+ * @param props 元素属性对象（包含可选 children）或组件属性对象。
+ * @returns 对应的元素或组件 Renderable。
  */
-export function jsx<K extends Tag>(tag: K, props: Props): Renderable<HTMLElementTagNameMap[K]> {
-  return createRenderableElement(tag, props, normalizeChildren(props.children));
+export function jsx<K extends Tag>(tag: K, props: Props): Renderable<HTMLElementTagNameMap[K]>;
+export function jsx<P>(tag: Component<P>, props: P): Renderable;
+export function jsx<P>(tag: Tag | Component<P>, props: Props | P): Renderable {
+  // 若 tag 是函数组件，直接调用一次 tag(props) 返回它构造的 Renderable；后续细粒度更新由内部表达式自行承担。
+  // TODO: 若 typeof tag === "function"，返回 tag(props as P)。
+  if (typeof tag === "function") {
+    throw new Error(`Function component "${tag.name || "Anonymous"}" is not implemented yet`);
+  }
+
+  const elementProps = props as Props;
+  return createRenderableElement(tag, elementProps, normalizeChildren(elementProps.children));
 }
 
 /** 多子节点 JSX 表达式与单子节点共享同一套归一化逻辑。 */
