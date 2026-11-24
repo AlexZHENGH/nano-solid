@@ -518,7 +518,7 @@ describe("函数组件", () => {
 });
 
 describe("表单输入绑定与 ref", () => {
-  it.skip("支持受控输入框的 placeholder、响应式 value、onInput 以及卸载后成对解绑", () => {
+  it("支持受控输入框的 placeholder、响应式 value、onInput 以及卸载后成对解绑", () => {
     const container = document.createElement("div");
     const [draft, setDraft] = createSignal("初始草稿");
     const onInputSpy = vi.fn((value: string) => setDraft(value));
@@ -558,7 +558,7 @@ describe("表单输入绑定与 ref", () => {
     expect(input.value).toBe("卸载后输入");
   });
 
-  it.skip("响应式 value 与当前 DOM 值相同时跳过重复写入，保留输入光标位置", () => {
+  it("响应式 value 与当前 DOM 值相同时跳过重复写入，保留输入光标位置", () => {
     const container = document.createElement("div");
     const [draft, setDraft] = createSignal("hello");
     let input!: HTMLInputElement;
@@ -590,7 +590,7 @@ describe("表单输入绑定与 ref", () => {
     unmount();
   });
 
-  it.skip("支持复选框的静态与响应式 checked，并在卸载后成对移除 onChange 监听", () => {
+  it("支持复选框的静态与响应式 checked，并在卸载后成对移除 onChange 监听", () => {
     const container = document.createElement("div");
     const [done, setDone] = createSignal(false);
     const onChangeSpy = vi.fn((checked: boolean) => setDone(checked));
@@ -628,7 +628,7 @@ describe("表单输入绑定与 ref", () => {
     expect(checkbox.checked).toBe(true);
   });
 
-  it.skip("在不支持的标签上传入表单属性时显式抛错", () => {
+  it("在不支持的标签上传入表单属性时显式抛错", () => {
     // @ts-expect-error: 刻意传入该标签不支持的属性。
     expect(() => <div value="bad">内容</div>).toThrow(/value.*div/);
     // @ts-expect-error: 刻意传入该标签不支持的属性。
@@ -637,7 +637,7 @@ describe("表单输入绑定与 ref", () => {
     expect(() => <div placeholder="bad">内容</div>).toThrow(/placeholder.*div/);
   });
 
-  it.skip("输入框支持禁用，下拉框挂上选项后才绑定字符串值", () => {
+  it("输入框支持禁用，下拉框挂上选项后才绑定字符串值", () => {
     const container = document.createElement("div");
     const [locked, setLocked] = createSignal(true);
     const [value, setValue] = createSignal("two");
@@ -672,7 +672,7 @@ describe("表单输入绑定与 ref", () => {
     expect(select.value).toBe("one");
   });
 
-  it.skip("ref 回调在属性与子节点完成后收到对应类型的真实 DOM 元素", () => {
+  it("ref 回调在属性与子节点完成后收到对应类型的真实 DOM 元素", () => {
     const container = document.createElement("div");
     let capturedInput: HTMLInputElement | undefined;
     let capturedText = "";
@@ -708,7 +708,7 @@ describe("表单输入绑定与 ref", () => {
     unmount();
   });
 
-  it.skip("受控表单与 ref 配合：提交后清空草稿并重新聚焦输入框", () => {
+  it("受控表单与 ref 配合：提交后清空草稿并重新聚焦输入框", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const added: string[] = [];

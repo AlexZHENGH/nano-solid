@@ -1,0 +1,58 @@
+在 `src/dom.ts` 的 `createElement` 中补齐表单属性、事件监听与 `ref` 回调：
+
+```ts
+if (props.placeholder !== undefined) {
+  if (!(element instanceof HTMLInputElement)) {
+    throw new Error(`The "placeholder" prop is not supported on <${tag}>`);
+  }
+  element.placeholder = props.placeholder;
+}
+if (props.onInput) {
+  const handleInput = props.onInput as EventListener;
+  element.addEventListener("input", handleInput);
+  onCleanup(() => {
+    element.removeEventListener("input", handleInput);
+  });
+}
+if (props.onChange) {
+  const handleChange = props.onChange as EventListener;
+  element.addEventListener("change", handleChange);
+  onCleanup(() => {
+    element.removeEventListener("change", handleChange);
+  });
+}
+if (props.checked !== undefined) {
+  if (!(element instanceof HTMLInputElement)) {
+    throw new Error(`The "checked" prop is not supported on <${tag}>`);
+  }
+  bindProperty(props.checked, (value) => {
+    element.checked = value;
+  });
+}
+```
+
+判断 `disabled` 时也看 DOM 属性本身。输入框和按钮都提供布尔型 `disabled`。
+
+把子节点挂进 `element` 后再绑定 `value`，这样下拉框才能找到指定的选项。最后调用 `ref`，此时回调已经可以读到选中的值。
+
+```ts
+// 跳过同值写入，避免输入框的光标因不必要的赋值而移动。
+if (props.value !== undefined) {
+  if (!("value" in element) || typeof element.value !== "string") {
+    throw new Error(`The "value" prop is not supported on <${tag}>`);
+  }
+  bindProperty(props.value, (value) => {
+    if (element.value !== value) {
+      element.value = value;
+    }
+  });
+}
+props.ref?.(node);
+```
+
+保存并启用全部 10 条测试后运行 `pnpm format && pnpm check && pnpm test:run`，88 条测试全部通过。现在框架层面已经具备构建完整 Todo 应用的全部原语，下一节我们整理公共导出并在 `examples/todo-app/` 交付真正的 Todo 应用。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 7.3-learn 7.3-solution -- src
+```

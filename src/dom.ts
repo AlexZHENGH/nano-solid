@@ -101,7 +101,10 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
   }
   if (props.placeholder !== undefined) {
     // placeholder 仅对输入框有效，静态写入原生 DOM 属性。
-    // TODO: 校验 element instanceof HTMLInputElement（否则抛出含 placeholder 与 tag 的 Error），并写入 element.placeholder。
+    if (!(element instanceof HTMLInputElement)) {
+      throw new Error(`The "placeholder" prop is not supported on <${tag}>`);
+    }
+    element.placeholder = props.placeholder;
   }
   if (props.onClick) {
     const handleClick = props.onClick;
@@ -113,11 +116,19 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
   }
   if (props.onInput) {
     // 绑定 input 事件并在 onCleanup 中成对移除，供受控输入框实时同步用户输入。
-    // TODO: 登记 addEventListener("input", handleInput) 并通过 onCleanup 成对 removeEventListener。
+    const handleInput = props.onInput as EventListener;
+    element.addEventListener("input", handleInput);
+    onCleanup(() => {
+      element.removeEventListener("input", handleInput);
+    });
   }
   if (props.onChange) {
     // 绑定 change 事件并在 onCleanup 中成对移除，供复选框等表单控件监听状态变更。
-    // TODO: 登记 addEventListener("change", handleChange) 并通过 onCleanup 成对 removeEventListener。
+    const handleChange = props.onChange as EventListener;
+    element.addEventListener("change", handleChange);
+    onCleanup(() => {
+      element.removeEventListener("change", handleChange);
+    });
   }
   if (props.disabled !== undefined) {
     // 按原生属性类型检查，输入框、按钮等拥有布尔 disabled 的元素都可以绑定。
@@ -130,7 +141,12 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
   }
   if (props.checked !== undefined) {
     // 仅输入框支持 checked 属性，直接写入布尔属性 element.checked 以支持 true / false 双向切换。
-    // TODO: 校验 element instanceof HTMLInputElement（否则抛出 Error(`The "checked" prop is not supported on <${tag}>`)），再用 bindProperty 写入 element.checked。
+    if (!(element instanceof HTMLInputElement)) {
+      throw new Error(`The "checked" prop is not supported on <${tag}>`);
+    }
+    bindProperty(props.checked, (value) => {
+      element.checked = value;
+    });
   }
 
   // 依次把每个子 Node 挂进当前元素；所有子节点的订阅清理已由所有权树统一接管。
@@ -140,11 +156,18 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
 
   if (props.value !== undefined) {
     // 选项先挂载才能设置 select.value；同值不写入能保留输入框的光标。
-    // TODO: 校验 "value" in element 且 typeof element.value === "string"（否则抛出 Error(`The "value" prop is not supported on <${tag}>`)），再用 bindProperty 在值不同时写入 element.value。
+    if (!("value" in element) || typeof element.value !== "string") {
+      throw new Error(`The "value" prop is not supported on <${tag}>`);
+    }
+    bindProperty(props.value, (value) => {
+      if (element.value !== value) {
+        element.value = value;
+      }
+    });
   }
 
   // 所有属性、事件与子节点准备就绪后再触发 ref 回调，让外部拿到完整初始化的真实元素引用。
-  // TODO: 若 props.ref 存在，调用 props.ref(node)。
+  props.ref?.(node);
 
   return node;
 }
