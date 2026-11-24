@@ -1,0 +1,50 @@
+在 `src/control-flow.ts` 的 `createEffect` 中补齐条件判断、旧分支释放与独立 `createRoot` 分支挂载逻辑：
+
+```ts
+// 仅追踪 props.when()：条件真假不变时保留现有分支；切换时先 clearBranch()，再在独立 createRoot 内创建新分支并插入到 end 锚点前。
+createEffect(() => {
+  const nextCondition = Boolean(props.when());
+  // 真假结果未发生变化时直接跳过，避免无意义销毁并重建现有 DOM 实例。
+  if (hasRendered && nextCondition === lastCondition) {
+    return;
+  }
+
+  hasRendered = true;
+  lastCondition = nextCondition;
+
+  // 切换分支前先释放旧分支的独立根作用域并清空锚点区间，再按新条件选择对应工厂。
+  clearBranch();
+  const factory = nextCondition ? props.children : props.fallback;
+  if (!factory) {
+    return;
+  }
+
+  // 首次执行时 end.parentNode 是临时 fragment，挂载后则是真实父容器，始终指向当前插入目标。
+  const parent = end.parentNode;
+  if (!parent) {
+    return;
+  }
+
+  // 在独立 createRoot 内求值工厂以隔离外层依赖追踪，确认成功后才记录 disposeBranch 并插入到 end 锚点之前。
+  let nextDispose: Dispose | undefined;
+  const branchNode = createRoot((dispose) => {
+    nextDispose = dispose;
+    return factory();
+  });
+  disposeBranch = nextDispose;
+  parent.insertBefore(branchNode, end);
+});
+```
+
+这里有三个小细节让整套生命周期严丝合缝：
+
+1. **条件真假未变直接返回**：例如 `when` 读取一个数字 `count()` 从 `1` 变为 `2`，两者布尔值都是 `true`，此时保留原有分支 DOM 和所有订阅，绝不误销毁重建。
+2. **在独立 `createRoot` 内执行 `factory()`**：既把分支内部的信号读值与监控 `when` 的 `createEffect` 彻底隔开，又确保 `when` 重跑时不会波及已存活的分支；把 `disposeBranch = nextDispose` 放在 `createRoot` 成功返回之后，也避免工厂抛错时记下已经回滚的失效句柄。
+3. **锚点区间 + 外层 `onCleanup` 闭环**：无论是嵌套在父元素里，还是直接作为 `render(() => <Show ... />, container)` 的根节点，卸载时 `<Show>` 清空两枚锚点之间的当前分支，`render` 清理两枚锚点，容器里不残留任何节点。
+
+删掉临时 `oxlint-disable-next-line` 注释并启用 6 条测试后运行 `pnpm dev`：打开页面能看到 `后台定时器 tick` 每秒递增；点 `隐藏计数器（触发 onCleanup）` 后 tick 立刻停住且 `onCleanup 清理次数` 加一；再次点击 `重新显示计数器`，挂载全新的计数器并恢复计时。运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，66 条测试和构建全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 6.4-learn 6.4-solution -- src
+```

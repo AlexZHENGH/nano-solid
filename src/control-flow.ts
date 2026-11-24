@@ -1,10 +1,4 @@
-import {
-  createEffect,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  createRoot,
-  onCleanup,
-  type Dispose,
-} from "./reactive.ts";
+import { createEffect, createRoot, onCleanup, type Dispose } from "./reactive.ts";
 
 /** 条件渲染组件 <Show> 的输入属性：使用函数 getter 和懒分支工厂避免无编译器时的提前求值。 */
 export type ShowProps<T> = {
@@ -29,9 +23,7 @@ export function Show<T>(props: ShowProps<T>): Node {
   fragment.appendChild(start);
   fragment.appendChild(end);
 
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   let hasRendered = false;
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   let lastCondition = false;
   let disposeBranch: Dispose | undefined;
 
@@ -63,9 +55,36 @@ export function Show<T>(props: ShowProps<T>): Node {
 
   // 仅追踪 props.when()：条件真假不变时保留现有分支；切换时先 clearBranch()，再在独立 createRoot 内创建新分支并插入到 end 锚点前。
   createEffect(() => {
-    // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
     const nextCondition = Boolean(props.when());
-    // TODO: 若 hasRendered && nextCondition === lastCondition 直接返回；否则更新标记并调用 clearBranch()，选出 children 或 fallback 工厂，在 createRoot 中构造节点并插入到 end 锚点之前。
+    // 真假结果未发生变化时直接跳过，避免无意义销毁并重建现有 DOM 实例。
+    if (hasRendered && nextCondition === lastCondition) {
+      return;
+    }
+
+    hasRendered = true;
+    lastCondition = nextCondition;
+
+    // 切换分支前先释放旧分支的独立根作用域并清空锚点区间，再按新条件选择对应工厂。
+    clearBranch();
+    const factory = nextCondition ? props.children : props.fallback;
+    if (!factory) {
+      return;
+    }
+
+    // 首次执行时 end.parentNode 是临时 fragment，挂载后则是真实父容器，始终指向当前插入目标。
+    const parent = end.parentNode;
+    if (!parent) {
+      return;
+    }
+
+    // 在独立 createRoot 内求值工厂以隔离外层依赖追踪，确认成功后才记录 disposeBranch 并插入到 end 锚点之前。
+    let nextDispose: Dispose | undefined;
+    const branchNode = createRoot((dispose) => {
+      nextDispose = dispose;
+      return factory();
+    });
+    disposeBranch = nextDispose;
+    parent.insertBefore(branchNode, end);
   });
 
   return fragment;

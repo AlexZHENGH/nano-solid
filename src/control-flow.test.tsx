@@ -6,7 +6,7 @@ import { createElement, createText, render } from "./dom.ts";
 import { createEffect, createSignal, onCleanup } from "./reactive.ts";
 
 describe("条件渲染 <Show>", () => {
-  it.skip("按 when 真假挂载主分支或 fallback，切换时释放旧分支副作用与清理回调", () => {
+  it("按 when 真假挂载主分支或 fallback，切换时释放旧分支副作用与清理回调", () => {
     const container = createElement("div");
     const [visible, setVisible] = createSignal(true);
     const [count, setCount] = createSignal(0);
@@ -66,7 +66,7 @@ describe("条件渲染 <Show>", () => {
     expect(onBranchCleanup).toHaveBeenCalledTimes(2);
   });
 
-  it.skip("when 的真假结果未变化时保留原有分支实例与 DOM 节点", () => {
+  it("when 的真假结果未变化时保留原有分支实例与 DOM 节点", () => {
     const container = createElement("div");
     const [count, setCount] = createSignal(1);
     const createMain = vi.fn(() => <p id="kept">数值：{() => count()}</p>);
@@ -100,7 +100,7 @@ describe("条件渲染 <Show>", () => {
     unmount();
   });
 
-  it.skip("分支工厂内的 signal 读值不会泄漏为 when 的依赖", () => {
+  it("分支工厂内的 signal 读值不会泄漏为 when 的依赖", () => {
     const container = createElement("div");
     const [visible] = createSignal(true);
     const [label, setLabel] = createSignal("初始");
@@ -132,7 +132,7 @@ describe("条件渲染 <Show>", () => {
     unmount();
   });
 
-  it.skip("支持省略 fallback，条件切换时在两枚锚点间精准插入并保留前后兄弟节点", () => {
+  it("支持省略 fallback，条件切换时在两枚锚点间精准插入并保留前后兄弟节点", () => {
     const container = createElement("div");
     const [show, setShow] = createSignal(false);
 
@@ -158,7 +158,7 @@ describe("条件渲染 <Show>", () => {
     unmount();
   });
 
-  it.skip("支持嵌套 <Show>，外层切假时级联释放内层分支与清理回调", () => {
+  it("支持嵌套 <Show>，外层切假时级联释放内层分支与清理回调", () => {
     const container = createElement("div");
     const [outer, setOuter] = createSignal(true);
     const [inner, setInner] = createSignal(true);
@@ -197,7 +197,7 @@ describe("条件渲染 <Show>", () => {
     unmount();
   });
 
-  it.skip("<Show> 直接作为 render 根节点并在运行期切换分支后，幂等卸载不残留锚点与节点", () => {
+  it("<Show> 直接作为 render 根节点并在运行期切换分支后，幂等卸载不残留锚点与节点", () => {
     const container = createElement("div");
     const sibling = createElement("span", {}, [createText("容器兄弟")]);
     container.appendChild(sibling);
