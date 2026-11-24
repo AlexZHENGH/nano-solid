@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    // 使用 Node 的 ESM 解析规则和类型，配合 package.json 的 type: module。
+    "module": "nodenext",
+    "target": "esnext",
+    "types": ["node"],
+
+    // 生成类型声明和源映射，便于检查编译产物与源码的对应关系。
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    // 让 TypeScript 检查可能不存在的值，以及可选属性的赋值。
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // 把每个文件作为模块检查，要求类型导入显式写成 import type。
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+
+    // 使用依赖提供的声明，把检查重点放在项目自己的源码。
+    "skipLibCheck": true
+  },
+  // 覆盖当前快照的源码、测试和仓库工具，供编辑器和 pnpm typecheck 检查。
+  // 构建时由 tsconfig.build.json 排除测试文件。
+  "include": ["scripts/**/*.ts", "src/**/*.ts"]
+}

@@ -1,0 +1,8 @@
+# 一次安装同时读取示例项目和文档站的依赖。
+packages:
+  - docs
+
+# 允许 Astro 依赖的构建和图片工具在安装时准备原生程序。
+allowBuilds:
+  esbuild: true
+  sharp: true

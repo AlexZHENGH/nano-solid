@@ -1,0 +1,212 @@
+@import "../../../styles/tokens.css";
+
+/* 统一正文与代码的字体基准，适配窄屏阅读。 */
+:root {
+  font-family: var(--ns-font-sans);
+  color: var(--ns-ink);
+  background: var(--ns-bg);
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+/* 让设定的宽度包含内边距，并由书页布局控制外边距。 */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+/* 保留下划线，让正文和目录里的链接容易识别。 */
+a {
+  color: var(--ns-link);
+  text-underline-offset: 0.22em;
+}
+a:hover {
+  color: var(--ns-link-hover);
+}
+
+/* 限制行宽，窄屏保留两边空隙，横向代码由自己的容器滚动。 */
+.frame {
+  width: min(100% - 2.5rem, 56rem);
+  margin-inline: auto;
+}
+
+/* 把目录和站名放在固定的页首区域，让每页都能回到目录。 */
+.book-header {
+  border-bottom: 1px solid var(--ns-border);
+  background: var(--ns-surface-alt);
+}
+.book-header .frame {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-block: 0.85rem;
+}
+.wordmark {
+  font: 700 1rem var(--ns-font-mono);
+  color: var(--ns-ink-strong);
+  text-decoration: none;
+}
+
+/* 用留白和字号区分页名和正文，标题长时允许换行。 */
+.page-title {
+  margin-block: 3.6rem 2rem;
+}
+h1,
+h2,
+h3 {
+  line-height: 1.35;
+}
+h1 {
+  font-size: clamp(1.75rem, 3.2vw, 2.35rem);
+  margin: 0.35em 0;
+  letter-spacing: -0.02em;
+}
+h2 {
+  font-size: 1.44rem;
+  margin-top: 2.15em;
+}
+/* 让文章结尾与视口底边留出距离。 */
+article {
+  padding-bottom: 2rem;
+}
+/* 行内代码用背景标出，代码块单独控制字号。 */
+code {
+  font: 0.88em var(--ns-font-mono);
+}
+:not(pre) > code {
+  color: #214f3d;
+  background: var(--ns-surface-hover);
+  border-radius: var(--ns-radius-sm);
+  padding: 0.12em 0.25em;
+}
+/* 长代码只横向滚动代码框，防止整个页面被宽行撑开。 */
+pre {
+  overflow-x: auto;
+  padding: 0.95rem 1.05rem;
+  border-radius: var(--ns-radius-md);
+  font-size: 0.93rem;
+}
+pre code {
+  font-size: inherit;
+}
+/* 让平级说明之间有短暂停顿。 */
+li + li {
+  margin-top: 0.45rem;
+}
+/* 对比表格样式：左对齐、浅底表头、表头不把中文短语拆成单字换行。 */
+table {
+  width: 100%;
+  margin-block: 1.25rem;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+th,
+td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--ns-border);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: var(--ns-surface-alt);
+  color: var(--ns-ink-strong);
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* 导读按段落阅读，目录继续使用紧凑的章节间距。 */
+.course-intro {
+  max-width: 52rem;
+}
+.course-intro > h2 {
+  margin-block-start: 1.3em;
+}
+.course-intro > ul {
+  padding-inline-start: 1.45rem;
+}
+/* 侧注提示框：用左竖线和淡底色把补充知识从主线步骤里视觉区分开。 */
+.callout {
+  --callout-accent: #23634c;
+  --callout-bg: #f2f7f3;
+  margin-block: 1.35rem;
+  padding: 0.85rem 1.05rem;
+  border-left: 3px solid var(--callout-accent);
+  border-radius: 0 var(--ns-radius-md) var(--ns-radius-md) 0;
+  background: var(--callout-bg);
+  font-size: 0.95rem;
+}
+.callout > :first-child {
+  margin-top: 0;
+}
+.callout > :last-child {
+  margin-bottom: 0;
+}
+.callout-title {
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+  color: var(--callout-accent);
+}
+/* 说明框采用经典暖黄色系，与下方森林绿的练习框清晰区分。 */
+.callout-note {
+  --callout-accent: #946200;
+  --callout-bg: #fdf8e8;
+}
+.callout-note :not(pre) > code {
+  color: #6e4800;
+  background: #f3ead0;
+}
+.callout-tip {
+  --callout-accent: #1d6f5f;
+  --callout-bg: #eef7f5;
+}
+.callout-important {
+  --callout-accent: #4c4f9c;
+  --callout-bg: #f3f3fa;
+}
+.callout-warning {
+  --callout-accent: #b45309;
+  --callout-bg: #fef3e6;
+}
+.callout-caution {
+  --callout-accent: var(--ns-danger);
+  --callout-bg: var(--ns-danger-bg);
+}
+/* 练习框：与解答框共用带顶栏底线和左竖线的卡片结构，使用主森林绿突出行动入口。 */
+.callout-practice {
+  --callout-accent: var(--ns-accent);
+  --callout-bg: var(--ns-accent-bg);
+  --callout-border: var(--ns-border-soft);
+  padding: 0 1rem 0.9rem;
+  border: 1px solid var(--callout-border);
+  border-left: 4px solid var(--callout-accent);
+  border-radius: var(--ns-radius-md);
+  font-size: 1rem;
+}
+.callout-practice > .callout-title {
+  margin: 0 -1rem 0.85rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--callout-border);
+  color: var(--callout-accent);
+}
+.callout pre {
+  margin-block: 0.65rem;
+}
+/* Mermaid 图表容器：与书页保持一致的留白和细边框，渲染后自适应居中显示。 */
+.mermaid {
+  margin-block: 1.4rem;
+  padding: 1rem;
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-md);
+  background: var(--ns-surface-raised);
+  text-align: center;
+  overflow-x: auto;
+}
+.mermaid:not([data-processed="true"]) {
+  color: var(--ns-subtle);
+  font-size: 0.85rem;
+  text-align: left;
+}
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}

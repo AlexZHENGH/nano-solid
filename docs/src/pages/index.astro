@@ -1,0 +1,40 @@
+---
+import BookLayout from "../layouts/BookLayout.astro";
+---
+
+<BookLayout
+  title="nano-solid: 从零实现一个响应式前端框架"
+  description="用 TypeScript 一步步实现细粒度响应式框架。"
+>
+  <section class="course-intro" aria-label="课程介绍">
+    <p>
+      这门课从一个计数器开始。你会用 TypeScript 实现状态读写、DOM 更新和 JSX，再用自己写的框架做一个能保存任务的 Todo 应用。
+    </p>
+
+    <h2>SolidJS 是什么？</h2>
+    <p>
+      SolidJS 是一个用 JSX 构建网页界面的框架。它会记录界面各处读取了哪些状态：每当计数变化，只有读到这个计数的表达式会重新计算，页面上的数字也跟着更新。这种机制叫<a
+        href="https://v1.solidjs.com/advanced-concepts/fine-grained-reactivity"
+        >细粒度响应式</a
+      >，也是 nano-solid 的设计起点。
+    </p>
+
+    <h2>为什么亲手做一遍？</h2>
+    <ul>
+      <li>
+        <strong>练习架构设计。</strong>随着功能加入，决定哪些职责属于状态、渲染和应用层。比如一个组件卸载时，谁负责结束它的订阅和事件监听？用测试把这个约定固定下来。
+      </li>
+      <li>
+        <strong>理解前端框架。</strong>沿着一次点击追到状态写入、依赖通知和 DOM 更新，再自己实现列表重排，看看已有节点是怎么被复用的。
+      </li>
+      <li>
+        <strong>搭建 TypeScript 项目。</strong>配置类型检查、Vite 开发和 Vitest 测试，生成库代码与类型声明，再到独立项目里安装验证。
+      </li>
+    </ul>
+
+    <p>练习时先运行题目里的例子，动手修改，再用测试和解答核对结果。</p>
+  </section>
+
+  <h2 id="lessons">课程目录</h2>
+  <p>课程章节会随着后续小节逐步加入。</p>
+</BookLayout>

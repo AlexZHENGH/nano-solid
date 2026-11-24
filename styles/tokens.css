@@ -1,0 +1,37 @@
+/* 文档站与 nano-solid 示例应用共用的设计变量（不包含全局标签重置，避免污染宿主排版）。 */
+:root {
+  --ns-font-sans: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ns-font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  --ns-bg: #fbfcfa;
+  --ns-surface: #f6f9f5;
+  --ns-surface-alt: #f0f5ef;
+  --ns-surface-hover: #edf2eb;
+  --ns-surface-raised: #ffffff;
+
+  --ns-ink: #1d2b26;
+  --ns-ink-strong: #182b22;
+  --ns-muted: #475b4f;
+  --ns-subtle: #6b7d73;
+
+  --ns-accent: #1f6a4f;
+  --ns-accent-hover: #174c3a;
+  --ns-accent-soft: #e2f2e8;
+  --ns-accent-bg: #f3f8f4;
+  --ns-link: #205c49;
+  --ns-link-hover: #0e3f2d;
+
+  --ns-slate: #4f6b7a;
+  --ns-slate-bg: #f5f8fa;
+  --ns-danger: #a63434;
+  --ns-danger-bg: #fcf2f2;
+  --ns-danger-border: #e5c3c3;
+
+  --ns-border: #dbe3dc;
+  --ns-border-strong: #b9cabf;
+  --ns-border-soft: #d0dfd5;
+
+  --ns-radius-sm: 0.25rem;
+  --ns-radius-md: 0.45rem;
+  --ns-radius-lg: 0.5rem;
+}

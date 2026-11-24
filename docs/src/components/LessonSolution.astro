@@ -1,0 +1,143 @@
+---
+import { execFileSync } from "node:child_process";
+import type { MDXContent } from "astro";
+import { Code } from "astro:components";
+
+/** 让每道题声明自己的解答文件和对应的 Git 快照标签。 */
+type Props = {
+  /** 解答 MDX 的文件名，省略扩展名。 */
+  slug: string;
+  /** 用来查看解答快照的 Git 标签。 */
+  tag: string;
+};
+
+/**
+ * 检查本地仓库是否已经打上对应的解答标签。
+ *
+ * @param tagName 要检查的 Git 标签名。
+ * @returns 标签存在时返回 true；仓库未打该标签或无法执行 git 时返回 false。
+ */
+function hasSolutionTag(tagName: string): boolean {
+  try {
+    // 只检查引用是否存在，不输出任何内容，避免干扰开发或构建日志。
+    execFileSync("git", ["show-ref", "--verify", "--quiet", `refs/tags/${tagName}`], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 1. 收集当前快照中已有的解答文件，保证题目快照缺少解答文件时也能独立构建。
+const { slug, tag } = Astro.props;
+const solutions = import.meta.glob<MDXContent>("../solutions/*.mdx", {
+  eager: true,
+  import: "Content",
+});
+
+// 2. 优先内联渲染同页解答；题目快照中无解答文件时，按本地是否存在解答标签给出对应引导。
+const Solution = solutions[`../solutions/${slug}.mdx`];
+const tagExists = Solution ? false : hasSolutionTag(tag);
+---
+
+<!-- 原生 details 负责默认折叠和键盘操作，静态页面也能直接使用。 -->
+<details class="lesson-solution">
+  <summary>
+    <span class="solution-title">解答</span>
+    <span class="solution-toggle show-solution">展开</span>
+    <span class="solution-toggle hide-solution">收起</span>
+  </summary>
+  <div class="solution-content">
+    {
+      Solution ? (
+        <Solution />
+      ) : tagExists ? (
+        <>
+          <p>先把改动提交到练习分支，再切到解答快照查看参考实现：</p>
+          <Code lang="sh" code={`git switch --detach ${tag}`} />
+        </>
+      ) : (
+        <p>
+          这一课的解答快照 <code>{tag}</code> 还没生成。等解答提交并打上标签后，刷新页面就能看到切换命令。
+        </p>
+      )
+    }
+  </div>
+</details>
+
+<style>
+  /* 解答卡片与练习框保持同一套布局：石板灰蓝左竖线、同色浅底和顶栏分隔线。 */
+  .lesson-solution {
+    margin-top: 1.15rem;
+    border: 1px solid #d2dde4;
+    border-left: 4px solid var(--ns-slate);
+    border-radius: var(--ns-radius-md);
+    background: var(--ns-slate-bg);
+  }
+
+  /* 隐藏原生三角形标记，改用右侧文字切换提示，让顶栏与练习框对齐。 */
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 1rem;
+    border-radius: 0.35rem;
+    background: var(--ns-slate-bg);
+    color: #3d5563;
+    font-weight: 700;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary:hover {
+    background: #ecf2f6;
+  }
+
+  summary:focus-visible {
+    outline: 2px solid var(--ns-slate);
+    outline-offset: 2px;
+  }
+
+  /* 展开后顶栏底边出现与练习框一致的细线，并以同色不透明底色吸顶，避免滚过文字透出。 */
+  details[open] > summary {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    border-bottom: 1px solid #d2dde4;
+    border-radius: 0.35rem 0.35rem 0 0;
+  }
+
+  .solution-toggle {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #5c7482;
+  }
+
+  /* 保持可见的操作文字和当前展开状态一致。 */
+  .hide-solution,
+  details[open] .show-solution {
+    display: none;
+  }
+
+  details[open] .hide-solution {
+    display: inline;
+  }
+
+  /* 解答正文与顶栏共用同一张卡片底色，首尾元素去掉多余外边距。 */
+  .solution-content {
+    padding: 0.85rem 1rem 0.9rem;
+  }
+
+  .solution-content > :first-child {
+    margin-top: 0;
+  }
+
+  .solution-content > :last-child {
+    margin-bottom: 0;
+  }
+</style>

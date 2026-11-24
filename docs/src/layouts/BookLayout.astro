@@ -1,0 +1,159 @@
+---
+import "../styles/book.css";
+
+/** Markdown 页和首页共用的页面标题与简介。 */
+type PageInfo = {
+  /** 显示在正文页头和浏览器标签栏。 */
+  title: string;
+  /** 写入 HTML meta description，不在正文页头单独渲染。 */
+  description: string;
+};
+
+/** 单个课程 MDX 模块导出的元数据。 */
+type LessonModule = {
+  frontmatter?: {
+    title?: string;
+  };
+};
+
+/** 底部翻页导航使用的课程条目。 */
+type LessonEntry = {
+  slug: string;
+  title: string;
+  url: string;
+};
+
+/**
+ * 从课程文件名提取章号与小节号，确保 10.0 排在 9.1 之后而不是 2.0 之前。
+ *
+ * @param slug 不含扩展名的课程文件名，例如 2.1-signal。
+ * @returns 用于排序的 [章号, 小节号]。
+ */
+function parseLessonOrder(slug: string): [number, number] {
+  const match = /^(\d+)(?:\.(\d+))?/.exec(slug);
+  if (!match) return [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER];
+  return [Number(match[1]), match[2] ? Number(match[2]) : 0];
+}
+
+/**
+ * 统一去掉路径末尾斜杠，方便比较当前请求路径与课程条目 URL。
+ *
+ * @param pathname 原始 URL 路径。
+ * @returns 归一化后的路径字符串（根路径保留为 "/"）。
+ */
+function normalizePath(pathname: string): string {
+  return pathname.replace(/\/+$/, "") || "/";
+}
+
+// 1. 解析当前页面元数据与部署路径前缀，兼容站点挂在子目录的情况。
+const page = (Astro.props.frontmatter ?? Astro.props) as PageInfo;
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
+const homeUrl = `${baseUrl}/`;
+
+// 2. 自动扫描当前快照中已有的课程页面，并按“章号 -> 小节号”排序生成导航列表。
+const lessonModules = import.meta.glob<LessonModule>("../pages/lessons/*.mdx", { eager: true });
+const lessons: LessonEntry[] = Object.entries(lessonModules)
+  .map(([filePath, mod]) => {
+    const slug = filePath.replace(/^.*\/([^/]+)\.mdx$/, "$1");
+    return {
+      slug,
+      title: mod.frontmatter?.title ?? slug,
+      url: `${baseUrl}/lessons/${slug}/`,
+    };
+  })
+  .sort((a, b) => {
+    const [aChapter, aSection] = parseLessonOrder(a.slug);
+    const [bChapter, bSection] = parseLessonOrder(b.slug);
+    return aChapter - bChapter || aSection - bSection || a.slug.localeCompare(b.slug);
+  });
+
+// 3. 根据当前路径定位相邻的上一课和下一课，供页底翻页栏渲染。
+const currentPath = normalizePath(Astro.url.pathname);
+const currentIndex = lessons.findIndex((item) => normalizePath(item.url) === currentPath);
+const previous = currentIndex > 0 ? lessons[currentIndex - 1] : undefined;
+const next = currentIndex >= 0 ? lessons[currentIndex + 1] : undefined;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={page.description} />
+    <title>{page.title}</title>
+  </head>
+  <body>
+    <!-- 每张页面都提供回到首页和课程目录的入口。 -->
+    <header class="book-header">
+      <nav class="frame" aria-label="课程导航">
+        <a class="wordmark" href={homeUrl}>nano-solid</a>
+        <a href={`${homeUrl}#lessons`}>课程目录</a>
+      </nav>
+    </header>
+    <!-- 首页介绍和 MDX 正文共用同一列内容区域。 -->
+    <main class="frame">
+      <article>
+        <header class="page-title">
+          <h1>{page.title}</h1>
+        </header>
+        <slot />
+        {
+          (previous || next) && (
+            <nav class="page-nav" aria-label="相邻课程">
+              {previous && <a href={previous.url}>← {previous.title}</a>}
+              {next && (
+                <a class="page-nav-next" href={next.url}>
+                  {next.title} →
+                </a>
+              )}
+            </nav>
+          )
+        }
+      </article>
+    </main>
+    <!-- 仅在页面包含 Mermaid 图表时按需加载本地打包的 mermaid，零图表页面不产生额外下载。 -->
+    <script>
+      const diagrams = document.querySelectorAll<HTMLElement>(".mermaid");
+      if (diagrams.length > 0) {
+        void (async () => {
+          // 动态导入由 Vite 拆成独立本地 chunk，完全离线可用。
+          const { default: mermaid } = await import("mermaid");
+          // 使用与课程书页一致的森林绿与石板灰蓝配色初始化主题。
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: "base",
+            themeVariables: {
+              fontFamily: 'system-ui, "PingFang SC", "Microsoft YaHei", sans-serif',
+              primaryColor: "#f3f8f4",
+              primaryBorderColor: "#1f6a4f",
+              primaryTextColor: "#1d2b26",
+              secondaryColor: "#f5f8fa",
+              secondaryBorderColor: "#4f6b7a",
+              secondaryTextColor: "#1d2b26",
+              lineColor: "#4f6b7a",
+              edgeLabelBackground: "#fbfcfa",
+            },
+          });
+          await mermaid.run({ nodes: diagrams });
+        })();
+      }
+    </script>
+  </body>
+</html>
+
+<style>
+  /* 底部相邻课程翻页：简洁文字链接，上一课靠左，下一课靠右。 */
+  .page-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-top: 2.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--ns-border);
+  }
+
+  .page-nav-next {
+    margin-left: auto;
+  }
+</style>

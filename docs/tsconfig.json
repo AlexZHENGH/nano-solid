@@ -1,0 +1,10 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist"],
+  "compilerOptions": {
+    // 由 Astro 的 Solid 集成转换 JSX，类型检查也使用 Solid 的 JSX 定义。
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js"
+  }
+}
