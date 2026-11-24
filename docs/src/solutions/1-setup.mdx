@@ -1,0 +1,13 @@
+打开 `src/main.ts`，把传给 `console.log` 的字符串换成下面这句（注意末尾的感叹号），同时在 `src/setup.test.ts` 里把 `it.skip` 改成 `it`：
+
+```ts
+// 把问候语写到标准输出，方便从终端和测试里观察。
+console.log("Building my own nano-solid!");
+```
+
+保存后跑 `pnpm dev` 会打印新的问候语，跑 `pnpm format && pnpm check && pnpm test:run` 两条测试全部通过。想看完整改动，运行：
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 1-learn 1-solution -- src
+```

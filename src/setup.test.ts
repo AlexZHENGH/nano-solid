@@ -15,7 +15,7 @@ it("能在 Node 中直接运行 TypeScript 入口", () => {
   expect(readStartupMessage()).not.toBe("");
 });
 
-it.skip("入口打印新的问候语", () => {
+it("入口打印新的问候语", () => {
   // 比较程序实际打印的文字，漏改内容或标点时让测试失败。
   expect(readStartupMessage()).toBe("Building my own nano-solid!");
 });
