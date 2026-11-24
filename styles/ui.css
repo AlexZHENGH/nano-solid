@@ -56,6 +56,9 @@
   color: var(--ns-accent);
   font-variant-numeric: tabular-nums;
 }
+.ns-counter-value-negative {
+  color: var(--ns-danger);
+}
 .ns-actions {
   display: flex;
   flex-wrap: wrap;

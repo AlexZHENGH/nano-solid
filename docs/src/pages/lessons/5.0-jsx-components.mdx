@@ -1,0 +1,43 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "5. JSX 与函数组件"
+description: "实现自动 JSX 运行时、静态与响应式属性绑定、构造异常回滚以及只执行一次的函数组件。"
+---
+
+import JsxCounterDemo from "../../components/JsxCounterDemo";
+
+在 [4.4](../4.4-render-unmount/) 结束时，我们已经用自己写的 DOM 渲染器跑出了完整的浏览器计数器。但回头看一眼 `src/main.ts`，为了拼出几个嵌套的 `div`、`span`、`button` 和动态 `class`，我们写了一百多行命令式代码：
+
+```ts
+// 第四章的命令式写法：每加一层标签和属性，都要手动创建并赋值。
+const label = createRenderableElement("span", [createStaticText("当前计数")]);
+label.node.className = "ns-counter-label";
+const value = createRenderableElement("span", [createReactiveText(() => String(count()))]);
+value.node.className = "ns-counter-value";
+const display = createRenderableElement("div", [label, value]);
+display.node.className = "ns-counter-display";
+```
+
+换成这一章要实现的 JSX 与函数组件，同一块视图只需要这样写：
+
+```tsx
+<div class="ns-counter-display">
+  <span class="ns-counter-label">当前计数</span>
+  <span
+    class={() => (count() < 0 ? "ns-counter-value ns-counter-value-negative" : "ns-counter-value")}
+  >
+    {() => count()}
+  </span>
+</div>
+```
+
+先体验一下这一章的终点效果：计数为 `0` 时 `重置` 按钮会自动禁用，点几次 `-1` 让计数变成负数，数字会通过动态 `class` 切换成警示色。同时留意底部：无论怎么点 `+1`、`-1`、`重置`，`文本节点更新次数` 会跟着增长，而 `组件函数执行次数` 始终停在 `1`（只有卸载后再重新挂载才会再次执行）：
+
+<JsxCounterDemo label="第五章预期效果：JSX 动态属性、禁用状态与单次执行的组件函数" client:load />
+
+这一章分四小节把整套声明式写法搭起来：
+
+- **5.1 JSX 运行时与子节点归一化**：用 `package.json` 的包内 `#nano-solid` 映射接入 `react-jsx` 自动转换，把字符串、数字、嵌套数组和响应式函数子节点归一化为 `Renderable`。
+- **5.2 静态属性与事件绑定**：升级 `createRenderableElement(tag, props, children)`，支持静态 `id`、`type`、`class` 以及成对清理的 `onClick` 监听。
+- **5.3 响应式属性与构造失败回滚**：抽离 `bindProperty` 驱动动态 `class` 和按钮 `disabled`，并在构造中途抛错时自动回滚已建立的订阅、监听与子节点。
+- **5.4 函数组件**：让 `jsx` 支持函数组件并验证“组件函数只执行一次”，用 `<Counter />` 彻底重构 `src/main.tsx`。
