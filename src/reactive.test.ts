@@ -99,7 +99,7 @@ it("嵌套 effect 退出后会恢复外层追踪上下文", () => {
   expect(outerSeen).toEqual([0, 1]);
 });
 
-it.skip("写入相同值时不会重复触发 effect", () => {
+it("写入相同值时不会重复触发 effect", () => {
   const [count, setCount] = createSignal(0);
   let runs = 0;
 
@@ -116,7 +116,7 @@ it.skip("写入相同值时不会重复触发 effect", () => {
   expect(runs).toBe(2);
 });
 
-it.skip("重复写入 NaN 时也会跳过通知", () => {
+it("重复写入 NaN 时也会跳过通知", () => {
   const [value, setValue] = createSignal(Number.NaN);
   let runs = 0;
 
@@ -130,7 +130,7 @@ it.skip("重复写入 NaN 时也会跳过通知", () => {
   expect(runs).toBe(1);
 });
 
-it.skip("写入 -0 替换 +0 时会视为新值", () => {
+it("写入 -0 替换 +0 时会视为新值", () => {
   const [zero, setZero] = createSignal(0);
   let runs = 0;
 

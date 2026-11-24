@@ -1,0 +1,25 @@
+在 `set(next)` 最前面用 `Object.is(value, next)` 拦截相同值即可：
+
+```ts
+/**
+ * 仅在新旧值不同时更新闭包并通知依赖这个 signal 的 effect 重新执行。
+ *
+ * @param next 要写入的新值。
+ */
+function set(next: T): void {
+  // 新旧值相同时直接返回，避免无意义的重复通知（Object.is 同时正确处理 NaN 和 +0 / -0）。
+  if (Object.is(value, next)) return;
+  // 先更新值，effect 重跑时调用 get() 才能读到这次写入的结果。
+  value = next;
+  for (const subscriber of subscribers) {
+    runEffect(subscriber);
+  }
+}
+```
+
+把判断放在赋值和遍历通知之前，写回原值时直接返回，既不会改写 `value`，也不会唤醒任何订阅者。保存后运行 `pnpm dev` 只会打印 `0`、`1`，运行 `pnpm format && pnpm check && pnpm test:run` 10 条测试全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 3.1-learn 3.1-solution -- src
+```
