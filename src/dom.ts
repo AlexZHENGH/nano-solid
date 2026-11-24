@@ -84,10 +84,12 @@ export function createStaticText(value: string): Renderable<Text> {
  */
 function bindProperty<T>(value: T | (() => T), apply: (next: T) => void): Dispose {
   // 函数形态表示响应式属性，需要用 createEffect 追踪并在值变化时重新 apply；静态值直接写入一次即可。
-  // TODO: 若 typeof value === "function"，返回 createEffect(() => apply((value as () => T)()))；否则调用 apply(value) 并返回空函数。
-  if (typeof value !== "function") {
-    apply(value);
+  if (typeof value === "function") {
+    const getter = value as () => T;
+    return createEffect(() => apply(getter()));
   }
+
+  apply(value);
   return () => {};
 }
 
@@ -128,34 +130,45 @@ export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
   }
 
   // 构造中途若属性校验失败或响应式 getter 抛错，必须调用 dispose() 回滚已建立的订阅、监听与 children，再重新抛出异常。
-  // TODO: 用 try / catch 包裹下面的属性绑定与子节点挂载逻辑；catch (error) 中先调用 dispose() 再重新 throw error。
-  if (props.id !== undefined) {
-    element.id = props.id;
-  }
-  if (props.type !== undefined) {
-    element.setAttribute("type", props.type);
-  }
-  if (props.class !== undefined) {
-    disposers.push(
-      bindProperty(props.class, (value) => {
-        element.className = value;
-      }),
-    );
-  }
-  if (props.onClick) {
-    element.addEventListener("click", props.onClick);
-  }
-  if (props.disabled !== undefined) {
-    // 仅按钮元素支持 disabled 属性，对非按钮标签提前显式报错，按钮则通过 bindProperty 写入 element.disabled。
-    // TODO: 若 !(element instanceof HTMLButtonElement) 抛出 Error(`The "disabled" prop is not supported on <${tag}>`)，否则用 bindProperty 绑定 element.disabled 并收集其 dispose。
-  }
+  try {
+    if (props.id !== undefined) {
+      element.id = props.id;
+    }
+    if (props.type !== undefined) {
+      element.setAttribute("type", props.type);
+    }
+    if (props.class !== undefined) {
+      disposers.push(
+        bindProperty(props.class, (value) => {
+          element.className = value;
+        }),
+      );
+    }
+    if (props.onClick) {
+      element.addEventListener("click", props.onClick);
+    }
+    if (props.disabled !== undefined) {
+      // 仅按钮元素支持 disabled 属性，对非按钮标签提前显式报错，按钮则通过 bindProperty 写入 element.disabled。
+      if (!(element instanceof HTMLButtonElement)) {
+        throw new Error(`The "disabled" prop is not supported on <${tag}>`);
+      }
+      disposers.push(
+        bindProperty(props.disabled, (value) => {
+          element.disabled = value;
+        }),
+      );
+    }
 
-  // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
-  for (const child of children) {
-    mount(element, child.node);
-  }
+    // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
+    for (const child of children) {
+      mount(element, child.node);
+    }
 
-  return { node, dispose };
+    return { node, dispose };
+  } catch (error) {
+    dispose();
+    throw error;
+  }
 }
 
 /**

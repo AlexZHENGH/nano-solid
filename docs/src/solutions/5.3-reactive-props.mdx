@@ -1,0 +1,67 @@
+先补齐 `bindProperty<T>(value, apply)`，把函数形态交给 `createEffect` 追踪，把静态值直接写入一次：
+
+```ts
+function bindProperty<T>(value: T | (() => T), apply: (next: T) => void): Dispose {
+  // 函数形态表示响应式属性，需要用 createEffect 追踪并在值变化时重新 apply；静态值直接写入一次即可。
+  if (typeof value === "function") {
+    const getter = value as () => T;
+    return createEffect(() => apply(getter()));
+  }
+
+  apply(value);
+  return () => {};
+}
+```
+
+接着在 `createRenderableElement` 中用 `try / catch` 包裹属性绑定与子节点挂载，并补齐按钮 `disabled` 的类型校验与 `bindProperty` 绑定：
+
+```ts
+try {
+  if (props.id !== undefined) {
+    element.id = props.id;
+  }
+  if (props.type !== undefined) {
+    element.setAttribute("type", props.type);
+  }
+  if (props.class !== undefined) {
+    disposers.push(
+      bindProperty(props.class, (value) => {
+        element.className = value;
+      }),
+    );
+  }
+  if (props.onClick) {
+    element.addEventListener("click", props.onClick);
+  }
+  if (props.disabled !== undefined) {
+    // 仅按钮元素支持 disabled 属性，对非按钮标签提前显式报错，按钮则通过 bindProperty 写入 element.disabled。
+    if (!(element instanceof HTMLButtonElement)) {
+      throw new Error(`The "disabled" prop is not supported on <${tag}>`);
+    }
+    disposers.push(
+      bindProperty(props.disabled, (value) => {
+        element.disabled = value;
+      }),
+    );
+  }
+
+  // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
+  for (const child of children) {
+    mount(element, child.node);
+  }
+
+  return { node, dispose };
+} catch (error) {
+  dispose();
+  throw error;
+}
+```
+
+无论是校验失败还是某个属性 getter 在首次求值时抛错，`catch` 都会立刻调用幂等的 `dispose()` 清理前面已登记的事件监听、属性 effect 和全部 `children`，再原样重抛异常。
+
+保存后运行 `pnpm dev` 可以看到状态徽章、负数警示色、卸载按钮样式以及 `0` 时禁用 `重置` 按钮全部生效，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build` 43 条测试和构建全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 5.3-learn 5.3-solution -- src
+```
