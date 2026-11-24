@@ -29,7 +29,7 @@ value = 1;
 console.log(count()); // 1
 ```
 
-第二段里 `count` 是一个函数，每次调用 `count()` 才去读当前的 `value`，所以拿到的是 `1`。到了 2.3 节，这个调用还会顺手告诉框架现在是谁在读这个值。
+第二段里 `count` 是一个函数，每次调用 `count()` 才去读当前的 `value`，所以拿到的是 `1`。到了 [2.3 节](../2.3-track-effects/)，这个调用还会顺手告诉框架现在是谁在读这个值。
 
 `createSignal` 做的就是把这套写法封装起来。每次调用 `createSignal(initialValue)`，都会新建一份局部的 `value`，再返回共享这份变量的 `get` 和 `set`，这就是闭包。由于每次调用都会创建独立的作用域，两个 signal 各自持有自己的 `value`，互不干扰。
 
@@ -42,7 +42,7 @@ console.log(count()); // 1
 
 <ReactivityConsoleDemo mode="signal" label="2.1 预期效果：写入后通过 getter 读到新值" client:load />
 
-这一节和整章结束时一样，最后都会在终端打出 `0`、`1`、`2`，但代码里的差别很明显：现在每次写完都必须自己调用 `console.log(count())` 才看得到变化，到 2.3 节就只剩 `setCount` 了。
+这一节和整章结束时一样，最后都会在终端打出 `0`、`1`、`2`，但代码里的差别很明显：现在每次写完都必须自己调用 `console.log(count())` 才看得到变化，到 [2.3 节](../2.3-track-effects/)就只剩 `setCount` 了。
 
 > [!PRACTICE]
 >

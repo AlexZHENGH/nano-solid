@@ -1,0 +1,51 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "2.3 让 effect 自动追踪依赖"
+description: "去掉手动 subscribe，让 getter 在实际读值时自动为当前运行的 effect 建立订阅。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+import ReactivityConsoleDemo from "../../components/ReactivityConsoleDemo";
+
+上一节我们用手动的 `subscribe` 接通了写入通知，只要调用 `setCount`，已登记的回调就会跟着执行。这一节我们把手动登记去掉，引入 `createEffect`，让 getter 在实际读值时自己发现并记录依赖，跑通我们在 [2.0](../2.0-reactivity/) 预告的完整效果。
+
+## 让函数自己说出它读了什么
+
+一个计算总价的函数同时读了 `price()` 和 `quantity()`。按上一节的手动订阅写法，你得把同一个回调分别登记到两个 signal 上。后面如果又加了一个 `discount()`，还得记得再去补一处登记：
+
+```ts
+const showTotal = () => console.log(price() * quantity());
+
+// 手动订阅时，必须自己把回调和每个 signal 一一配对。
+subscribePrice(showTotal);
+subscribeQuantity(showTotal);
+```
+
+其实 `price()` 执行的时候，它正处在对应 signal 的 `get()` 里，天然知道自己是哪个 signal。唯一缺的信息是：此刻是谁调用了它？
+
+解决办法很直接。我们提供一个新的入口 `createEffect(effect)`：在执行回调前，先把当前正在跑的 `effect` 记到模块级变量 `currentEffect` 里，再立刻执行一次回调。回调执行到 `price()` 或 `quantity()` 时，`get()` 只要看一眼 `currentEffect` 有没有值，有就顺手把它加进自己的 `subscribers`。这样不管回调里读了几个 signal，或者以后又新加了 `discount()`，依赖都会跟着实际发生的读取自动建立起来。
+
+既然 `get()` 已经接管了登记工作，`createSignal` 就可以去掉上一节用来过渡的 `subscribe`，回到干净的 `[get, set]`。
+
+> [!NOTE]
+> 如果回调执行到一半抛出异常，或者一个 effect 里嵌套执行了另一个 effect，退出时必须把 `currentEffect` 恢复成进入前的值。把旧值存进 `previous`，再用 `try / finally` 恢复，就能避免泄露出来的 `currentEffect` 把后面普通的 `count()` 读取误记成订阅，也能保证内层退出后外层余下的读取继续归属外层。这两种边界也已经写进了本节的测试里。
+
+## 预期效果
+
+下面和 [2.0](../2.0-reactivity/) 预告的一样：页面加载时 `createEffect` 先执行一次，Console 里立刻出现 `0`。接着点 `调用 setCount(1)` 和 `调用 setCount(2)`，代码里只追加了写入，Console 却自动多出 `1` 和 `2`。
+
+<ReactivityConsoleDemo
+  mode="effect"
+  label="2.3 预期效果：effect 自动追踪读取并在写入后重跑"
+  client:load
+/>
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/2.3 2.3-learn
+> ```
+>
+> 起手运行 `pnpm dev` 只会打印一行 `0`。补齐 `src/reactive.ts` 中的 `currentEffect` 追踪上下文与 `get()` 自动登记逻辑，让 `pnpm dev` 依次打印 `0`、`1`、`2`，并保证 `pnpm format && pnpm check && pnpm test:run` 全部通过。
+
+<LessonSolution slug="2.3-track-effects" tag="2.3-solution" />
