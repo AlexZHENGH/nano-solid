@@ -1,7 +1,7 @@
 /** 会随读取过的 signal 变化而重新执行的副作用函数。 */
 type Effect = () => void;
 /** 记录当前同步执行中的 effect，getter 靠它知道这次读取该登记给谁。 */
-// TODO: 声明模块级变量 currentEffect: Effect | undefined。
+let currentEffect: Effect | undefined;
 
 /**
  * 在追踪上下文中执行回调，并在退出时恢复外层记录。
@@ -10,8 +10,13 @@ type Effect = () => void;
  */
 function runEffect(effect: Effect): void {
   // 保存外层 effect，并在 try/finally 中恢复，避免嵌套或抛错后残留旧引用。
-  // TODO: 保存当前 currentEffect，将其设为 effect，在 try/finally 中执行并恢复。
-  effect();
+  const previous = currentEffect;
+  currentEffect = effect;
+  try {
+    effect();
+  } finally {
+    currentEffect = previous;
+  }
 }
 
 /**
@@ -41,7 +46,9 @@ export function createSignal<T>(initialValue: T) {
    */
   function get(): T {
     // 只有在同步执行中的 effect 读值时，才把它加入当前 signal 的订阅集合。
-    // TODO: 如果 currentEffect 有值，把它加入 subscribers。
+    if (currentEffect) {
+      subscribers.add(currentEffect);
+    }
     return value;
   }
 

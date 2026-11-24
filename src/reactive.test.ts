@@ -18,7 +18,7 @@ it("写入新值后 getter 返回新值", () => {
   expect(other()).toBe(10);
 });
 
-it.skip("effect 自动订阅它读取的 signal", () => {
+it("effect 自动订阅它读取的 signal", () => {
   const [count, setCount] = createSignal(0);
   const seen: number[] = [];
 
@@ -31,7 +31,7 @@ it.skip("effect 自动订阅它读取的 signal", () => {
   expect(seen).toEqual([0, 1, 2]);
 });
 
-it.skip("一次写入通知多个 effect", () => {
+it("一次写入通知多个 effect", () => {
   const [count, setCount] = createSignal(0);
   const first: number[] = [];
   const second: number[] = [];
@@ -48,7 +48,7 @@ it.skip("一次写入通知多个 effect", () => {
   expect(second).toEqual([0, 1]);
 });
 
-it.skip("一个 effect 自动追踪多个 signal", () => {
+it("一个 effect 自动追踪多个 signal", () => {
   const [price, setPrice] = createSignal(10);
   const [quantity, setQuantity] = createSignal(2);
   const totals: number[] = [];
@@ -62,7 +62,7 @@ it.skip("一个 effect 自动追踪多个 signal", () => {
   expect(totals).toEqual([20, 30, 45]);
 });
 
-it.skip("effect 抛错后仍会恢复追踪上下文", () => {
+it("effect 抛错后仍会恢复追踪上下文", () => {
   const [count, setCount] = createSignal(0);
   let runs = 0;
 
@@ -81,7 +81,7 @@ it.skip("effect 抛错后仍会恢复追踪上下文", () => {
   expect(runs).toBe(1);
 });
 
-it.skip("嵌套 effect 退出后会恢复外层追踪上下文", () => {
+it("嵌套 effect 退出后会恢复外层追踪上下文", () => {
   const [inner] = createSignal(0);
   const [outer, setOuter] = createSignal(0);
   const outerSeen: number[] = [];

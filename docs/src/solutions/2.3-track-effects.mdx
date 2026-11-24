@@ -1,0 +1,50 @@
+`createEffect` 首次执行回调，就像在问回调“你会读哪些 signal”。执行期间先把当前回调记到 `currentEffect`，读到哪个 signal，就由那个 signal 的 `get()` 顺手把它记进自己的 `subscribers`：
+
+```ts
+/** 会随读取过的 signal 变化而重新执行的副作用函数。 */
+type Effect = () => void;
+/** 记录当前同步执行中的 effect，getter 靠它知道这次读取该登记给谁。 */
+let currentEffect: Effect | undefined;
+
+/**
+ * 在追踪上下文中执行回调，并在退出时恢复外层记录。
+ *
+ * @param effect 本轮要执行的副作用回调。
+ */
+function runEffect(effect: Effect): void {
+  // 保存外层 effect，并在 try/finally 中恢复，避免嵌套或抛错后残留旧引用。
+  const previous = currentEffect;
+  currentEffect = effect;
+  try {
+    effect();
+  } finally {
+    currentEffect = previous;
+  }
+}
+```
+
+接着在 `createSignal` 的 `get()` 里检查 `currentEffect`：
+
+```ts
+/**
+ * 读取当前闭包里保存的值，并在 effect 执行期间登记依赖。
+ *
+ * @returns 最新状态。
+ */
+function get(): T {
+  // 只有在同步执行中的 effect 读值时，才把它加入当前 signal 的订阅集合。
+  if (currentEffect) {
+    subscribers.add(currentEffect);
+  }
+  return value;
+}
+```
+
+沿着执行过程走一遍：`createEffect` 首次跑回调时，`currentEffect` 指向回调本身，`count()` 返回 `0` 并把回调加入 `subscribers`，退出时 `finally` 把 `currentEffect` 恢复为 `undefined`。接着 `setCount(1)` 先更新 `value`，再通过 `runEffect` 重跑回调并打印 `1`。`setCount(2)` 重复同样的过程，终端依次输出 `0`、`1`、`2`。因为 `subscribers` 是 `Set`，重跑时再次登记同一个函数引用仍只会保留一份。
+
+到这里，我们已经用不到 50 行代码做出了一个能跑通的最小响应式系统。但在收尾前，不妨想一个稍微复杂点的场景：如果 effect 里写的是条件分支 `isLeft() ? left() : right()`，最初 `isLeft()` 为 `true`，随后切成了 `false` 去读 `right()`。此时 `left` 的 `subscribers` 里还留着这个 effect。再改一次 `left`，日志就会把右边的值又多打印一遍。下一章我们就来解决这类真实边界：跳过同值写入、让 effect 忘掉这轮没读到的旧依赖，以及如何停止一个不再需要的 effect。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 2.3-learn 2.3-solution -- src
+```
