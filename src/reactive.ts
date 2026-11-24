@@ -233,8 +233,21 @@ export function createEffect(callback: EffectCallback): Dispose {
  */
 export function createMemo<T>(compute: () => T): () => T {
   // 用内部 signal 存缓存值，并用 createEffect 驱动重算；首次执行先初始化缓存，后续通过 set 复用 Object.is 同值截断。
-  // TODO: 在 createEffect 中调用 compute()，首次执行用 createSignal(next) 初始化 [get, set]，后续调用 set(next)，最后返回 () => get()。
-  return compute;
+  let initialized = false;
+  let get!: () => T;
+  let set!: (next: T) => void;
+
+  createEffect(() => {
+    const next = compute();
+    if (!initialized) {
+      initialized = true;
+      [get, set] = createSignal(next);
+    } else {
+      set(next);
+    }
+  });
+
+  return () => get();
 }
 
 /**

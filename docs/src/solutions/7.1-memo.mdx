@@ -1,0 +1,31 @@
+在 `src/reactive.ts` 中用内部 `createSignal` 和 `createEffect` 实现 `createMemo`：
+
+```ts
+export function createMemo<T>(compute: () => T): () => T {
+  // 用内部 signal 存缓存值，并用 createEffect 驱动重算；首次执行先初始化缓存，后续通过 set 复用 Object.is 同值截断。
+  let initialized = false;
+  let get!: () => T;
+  let set!: (next: T) => void;
+
+  createEffect(() => {
+    const next = compute();
+    if (!initialized) {
+      initialized = true;
+      [get, set] = createSignal(next);
+    } else {
+      set(next);
+    }
+  });
+
+  return () => get();
+}
+```
+
+因为 `createEffect` 会在创建时同步跑完第一轮，`[get, set]` 在返回 `() => get()` 之前必定已经初始化完成；后续依赖更新时走 `set(next)`，自动复用 `createSignal` 的 `Object.is` 拦截同值更新；所属 `Owner` 释放或首次求值抛错时，内部 effect 也会随所有权树自动退订。
+
+保存并启用 5 条测试后运行 `pnpm format && pnpm check && pnpm test:run`，73 条测试全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 7.1-learn 7.1-solution -- src
+```

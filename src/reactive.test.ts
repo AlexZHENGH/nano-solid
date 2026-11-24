@@ -579,7 +579,7 @@ it("onCleanup 回调在非追踪环境下执行，不会误把读值登记为外
   expect(outerRuns).toBe(2);
 });
 
-it.skip("多次读取 createMemo 直接命中缓存，不重复执行计算函数", () => {
+it("多次读取 createMemo 直接命中缓存，不重复执行计算函数", () => {
   const [count, setCount] = createSignal(2);
   const compute = vi.fn(() => count() * 10);
 
@@ -596,7 +596,7 @@ it.skip("多次读取 createMemo 直接命中缓存，不重复执行计算函�
   expect(compute).toHaveBeenCalledTimes(2);
 });
 
-it.skip("上游变化但派生结果按 Object.is 相同时，不唤醒下游 effect", () => {
+it("上游变化但派生结果按 Object.is 相同时，不唤醒下游 effect", () => {
   const [count, setCount] = createSignal(1);
   const compute = vi.fn(() => count() > 0);
   const seen: boolean[] = [];
@@ -620,7 +620,7 @@ it.skip("上游变化但派生结果按 Object.is 相同时，不唤醒下游 ef
   expect(seen).toEqual([true, false]);
 });
 
-it.skip("支持链式 createMemo 组合派生，同值截断会阻断整条下游链路", () => {
+it("支持链式 createMemo 组合派生，同值截断会阻断整条下游链路", () => {
   const [todos, setTodos] = createSignal([
     { id: 1, completed: true },
     { id: 2, completed: false },
@@ -652,7 +652,7 @@ it.skip("支持链式 createMemo 组合派生，同值截断会阻断整条下�
   expect(seen).toEqual(["剩余 1 项", "剩余 2 项"]);
 });
 
-it.skip("所属 createRoot 释放后，createMemo 自动停止响应上游变化", () => {
+it("所属 createRoot 释放后，createMemo 自动停止响应上游变化", () => {
   const [count, setCount] = createSignal(0);
   const compute = vi.fn(() => count() * 2);
 
@@ -675,7 +675,7 @@ it.skip("所属 createRoot 释放后，createMemo 自动停止响应上游变化
   expect(memo()).toBe(2);
 });
 
-it.skip("createMemo 首次求值读值后抛错会清理半截订阅并原样重抛", () => {
+it("createMemo 首次求值读值后抛错会清理半截订阅并原样重抛", () => {
   const [count, setCount] = createSignal(0);
   const compute = vi.fn(() => {
     count();
