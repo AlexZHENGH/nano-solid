@@ -67,7 +67,7 @@ describe("JSX 运行时与子节点归一化", () => {
 });
 
 describe("静态属性与事件绑定", () => {
-  it.skip("将静态 id、type 与 class 属性写入真实 DOM 元素", () => {
+  it("将静态 id、type 与 class 属性写入真实 DOM 元素", () => {
     const view = (
       <button id="submit-btn" type="button" class="ns-btn">
         提交
@@ -81,7 +81,7 @@ describe("静态属性与事件绑定", () => {
     expect(button.textContent).toBe("提交");
   });
 
-  it.skip("绑定 onClick 回调并在点击时驱动信号更新视图", () => {
+  it("绑定 onClick 回调并在点击时驱动信号更新视图", () => {
     const container = document.createElement("div");
     const [count, setCount] = createSignal(0);
 
@@ -106,7 +106,7 @@ describe("静态属性与事件绑定", () => {
     unmount();
   });
 
-  it.skip("卸载后成对移除 onClick 监听，不再触发点击回调", () => {
+  it("卸载后成对移除 onClick 监听，不再触发点击回调", () => {
     const container = document.createElement("div");
     const handleClick = vi.fn();
 

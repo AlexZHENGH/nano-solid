@@ -1,0 +1,51 @@
+在 `createRenderableElement` 中把 `props` 里的静态属性写入元素节点，并用同一个 `props.onClick` 引用成对完成监听与移除：
+
+```ts
+export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  props: ElementProps = {},
+  children: Renderable[] = [],
+): Renderable<HTMLElementTagNameMap[K]> {
+  const node = createElement(tag);
+  // 宽化为 HTMLElement，使 addEventListener("click", ...) 命中 MouseEvent 重载。
+  const element: HTMLElement = node;
+
+  // 把静态属性（id、class、type）写入元素，并在提供 onClick 时绑定点击监听。
+  if (props.id !== undefined) {
+    element.id = props.id;
+  }
+  if (props.class !== undefined) {
+    element.className = props.class;
+  }
+  if (props.type !== undefined) {
+    element.setAttribute("type", props.type);
+  }
+  if (props.onClick) {
+    element.addEventListener("click", props.onClick);
+  }
+
+  // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
+  for (const child of children) {
+    mount(element, child.node);
+  }
+
+  function dispose(): void {
+    // 释放元素时先成对移除 click 监听，再沿树递归释放所有子节点。
+    if (props.onClick) {
+      element.removeEventListener("click", props.onClick);
+    }
+    for (const child of children) {
+      child.dispose();
+    }
+  }
+
+  return { node, dispose };
+}
+```
+
+保存后运行 `pnpm dev` 可以看到计数器恢复完整的森林绿样式与全部按钮交互，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build` 38 条测试和构建全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 5.2-learn 5.2-solution -- src
+```

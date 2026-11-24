@@ -84,7 +84,6 @@ export function createStaticText(value: string): Renderable<Text> {
  */
 export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   props: ElementProps = {},
   children: Renderable[] = [],
 ): Renderable<HTMLElementTagNameMap[K]> {
@@ -93,7 +92,18 @@ export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
   const element: HTMLElement = node;
 
   // 把静态属性（id、class、type）写入元素，并在提供 onClick 时绑定点击监听。
-  // TODO: 按需设置 element.id、element.className、element.setAttribute("type", props.type)，并绑定 props.onClick 监听。
+  if (props.id !== undefined) {
+    element.id = props.id;
+  }
+  if (props.class !== undefined) {
+    element.className = props.class;
+  }
+  if (props.type !== undefined) {
+    element.setAttribute("type", props.type);
+  }
+  if (props.onClick) {
+    element.addEventListener("click", props.onClick);
+  }
 
   // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
   for (const child of children) {
@@ -102,7 +112,9 @@ export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
 
   function dispose(): void {
     // 释放元素时先成对移除 click 监听，再沿树递归释放所有子节点。
-    // TODO: 若存在 props.onClick，调用 element.removeEventListener("click", props.onClick)。
+    if (props.onClick) {
+      element.removeEventListener("click", props.onClick);
+    }
     for (const child of children) {
       child.dispose();
     }
