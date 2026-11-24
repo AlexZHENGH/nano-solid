@@ -14,10 +14,10 @@ export type JSXChild =
   | (() => string | number)
   | JSXChild[];
 
-/** 原生 HTML 标签接收的 JSX 属性：元素属性与可选 children。 */
-export type Props = {
+/** 原生 HTML 标签接收的 JSX 属性：按具体标签保留强类型事件与 ref，并附带可选 children。 */
+export type Props<K extends Tag = Tag> = {
   children?: JSXChild;
-} & ElementProps;
+} & ElementProps<HTMLElementTagNameMap[K]>;
 
 /** 函数组件类型：接收属性对象，在创建时执行一次并返回原生 DOM Node。 */
 export type Component<P = Record<string, never>> = (props: P) => Node;
@@ -64,7 +64,7 @@ function normalizeChildren(children: JSXChild): Node[] {
  * @param props 元素属性对象（包含可选 children）或组件属性对象。
  * @returns 对应的原生 DOM 节点。
  */
-export function jsx<K extends Tag>(tag: K, props: Props): HTMLElementTagNameMap[K];
+export function jsx<K extends Tag>(tag: K, props: Props<K>): HTMLElementTagNameMap[K];
 export function jsx<P>(tag: Component<P>, props: P): Node;
 export function jsx<P>(tag: Tag | Component<P>, props: Props | P): Node {
   // 若 tag 是函数组件，直接调用一次 tag(props) 返回它构造的 Node；后续细粒度更新由内部表达式自行承担。
@@ -72,7 +72,9 @@ export function jsx<P>(tag: Tag | Component<P>, props: Props | P): Node {
     return tag(props as P);
   }
 
-  const elementProps = props as Props;
+  const elementProps = props as ElementProps<HTMLElementTagNameMap[typeof tag]> & {
+    children?: JSXChild;
+  };
   return createElement(tag, elementProps, normalizeChildren(elementProps.children));
 }
 
@@ -87,8 +89,8 @@ export namespace JSX {
   /** 每个 JSX 表达式直接求值为原生 DOM Node，生命周期清理统一交给所有权树。 */
   export type Element = Node;
 
-  /** 所有原生 HTML 标签共享的基础 JSX 属性定义。 */
+  /** 按标签名映射各自的强类型 JSX 属性定义（使 <input> 的 ref 与 onInput 自动推导为 HTMLInputElement）。 */
   export type IntrinsicElements = {
-    [K in Tag]: Props;
+    [K in Tag]: Props<K>;
   };
 }

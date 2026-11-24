@@ -1,0 +1,67 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "7.3 表单输入绑定与 ref"
+description: "按元素标签收窄 ElementProps<T> 类型，补齐 value、checked、placeholder、onInput、onChange 与 ref，打通受控表单与自动聚焦。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+到 [7.2](../7.2-for-list/) 为止，我们已经同时拥有了 `createMemo`、`<Show>` 和按 `key` 复用的 `<For>`。在真正落手写 Todo 应用前，还差最后一块轻量的 DOM 拼图：**受控输入框、复选框以及获取真实 DOM 引用的 `ref`**。
+
+这一节我们要让 Todo 的新建栏与复选框直接写成下面这样，并且 TypeScript 自动把 `event.currentTarget` 和 `ref` 的参数推导为 `HTMLInputElement`：
+
+```tsx
+<input
+  type="text"
+  placeholder="输入待办事项..."
+  ref={(element) => {
+    composerInput = element;
+  }}
+  value={() => draft()}
+  onInput={(event) => setDraft(event.currentTarget.value)}
+/>
+
+<input
+  type="checkbox"
+  checked={() => todo().completed}
+  onChange={() => toggleTodo(todo().id)}
+/>
+```
+
+## 按标签推导强类型事件与 `ref`
+
+在 `src/dom.ts` 中把 `ElementProps` 升级为泛型 `ElementProps<T extends HTMLElement = HTMLElement>`，并把 `src/jsx-runtime.ts` 中的 `JSX.IntrinsicElements` 改为按标签名映射：
+
+```ts
+export type TargetedEvent<T extends HTMLElement> = Event & {
+  currentTarget: T;
+};
+
+export type IntrinsicElements = {
+  [K in Tag]: Props<K>; // 每个标签拿到对应的 HTMLElementTagNameMap[K]
+};
+```
+
+这样写完之后，在 `<input>` 上写 `onInput={(e) => setDraft(e.currentTarget.value)}` 或 `ref={(el) => (input = el)}` 时，不需要任何类型断言，TypeScript 会自动把 `e.currentTarget` 和 `el` 推导为 `HTMLInputElement`；在 `<button>` 上写 `ref` 则自动推导为 `HTMLButtonElement`。
+
+## 表单属性与 `ref` 的四个实现细节
+
+补齐 `src/dom.ts` 中 `createElement` 的表单绑定时，有四个很实用的工程细节：
+
+1. **写入 `element.value` 前先比较 `element.value !== value`**：当用户在输入框中间插入字符时，浏览器会触发 `onInput` 把最新文本写进 signal，紧接着 `bindProperty` 的 `createEffect` 会同步运行回来。如果这时无条件再写一次 `element.value = value`，很多浏览器会把输入光标直接跳到文本末尾。加一句 `if (element.value !== value)` 跳过冗余写入，既保证单向数据流闭环，又不会打断打字体验。
+2. **直接操作布尔属性 `element.checked`**：与 `5.3` 的 `element.disabled` 同理，不要用 `setAttribute("checked", ...)`，直接通过 `bindProperty` 写入 `element.checked = value`，才能在 `true` 和 `false` 之间实时双向切换。
+3. **`onInput` / `onChange` 成对通过 `onCleanup` 解绑**：与 `onClick` 一致，把 `removeEventListener` 登记到当前 `Owner`，组件卸载或列表删行时自动释放，绝不泄漏监听。
+4. **`ref` 在属性、事件和子节点都挂载完毕后触发**：在 `createElement` 即将 `return node` 之前调用 `props.ref?.(node)`，确保调用方在 `ref` 回调里看到的永远是已经初始化完整的真实 DOM 元素。
+
+> [!NOTE]
+> `disabled` 要求元素有同名的布尔属性，`value` 要求同名属性是字符串。`ElementProps<T>` 用条件类型排除不合适的标签，运行时再检查一次。像 `<select value="two">` 这样的绑定要等选项挂载后才执行，否则浏览器找不到 `value` 为 `two` 的选项。当前实现仍由 `<input>` 处理 `checked` 和 `placeholder`。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/7.3 7.3-learn
+> ```
+>
+> `src/dom.ts` 与 `src/jsx-runtime.ts` 已经升级好按标签推导的 `ElementProps<T>`、`TargetedEvent<T>` 与 `Props<K>` 类型，`src/jsx-runtime.test.tsx` 新增了 7 条 `it.skip` 测试，覆盖受控输入框、同值跳过写入保留光标、复选框 `checked` 与 `onChange` 清理、表单标签校验、输入框禁用与下拉框选中项、`ref` 调用时机以及提交后清空并自动聚焦。补齐 `src/dom.ts` 中 `createElement` 的表单绑定与 `ref` `// TODO`，确保 `pnpm format && pnpm check && pnpm test:run` 全部通过。
+
+<LessonSolution slug="7.3-forms-and-ref" tag="7.3-solution" />

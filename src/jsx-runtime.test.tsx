@@ -192,7 +192,8 @@ describe("响应式属性与构造失败回滚", () => {
     expect(button.disabled).toBe(false);
   });
 
-  it("在非按钮元素上传入 disabled 时显式抛错", () => {
+  it("在没有 disabled 的元素上传入该属性时显式抛错", () => {
+    // @ts-expect-error: 刻意绕过类型检查，验证运行时也拒绝该属性。
     expect(() => <div disabled={true}>内容</div>).toThrow(/disabled.*div/);
   });
 
@@ -206,6 +207,7 @@ describe("响应式属性与构造失败回滚", () => {
     expect(() =>
       render(
         () => (
+          // @ts-expect-error: 故意触发属性校验，以验证抛错前的订阅能回滚。
           <div class={readClass} disabled={true}>
             {readLabel}
           </div>
@@ -512,5 +514,259 @@ describe("函数组件", () => {
     setCount(2);
     expect(seen).toEqual([0, 1]);
     expect(stopped).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("表单输入绑定与 ref", () => {
+  it.skip("支持受控输入框的 placeholder、响应式 value、onInput 以及卸载后成对解绑", () => {
+    const container = document.createElement("div");
+    const [draft, setDraft] = createSignal("初始草稿");
+    const onInputSpy = vi.fn((value: string) => setDraft(value));
+    let input!: HTMLInputElement;
+
+    const unmount = render(() => {
+      input = (
+        <input
+          type="text"
+          placeholder="输入待办事项..."
+          value={() => draft()}
+          onInput={(event) => onInputSpy(event.currentTarget.value)}
+        />
+      ) as HTMLInputElement;
+      return input;
+    }, container);
+
+    expect(input.placeholder).toBe("输入待办事项...");
+    expect(input.value).toBe("初始草稿");
+
+    // 模拟用户输入：触发 input 事件把新内容同步回 signal。
+    input.value = "买牛奶";
+    input.dispatchEvent(new Event("input"));
+    expect(draft()).toBe("买牛奶");
+    expect(onInputSpy).toHaveBeenCalledTimes(1);
+
+    // 外部写入 signal 应反向同步回 DOM 输入框。
+    setDraft("");
+    expect(input.value).toBe("");
+
+    // 卸载后监听与响应式订阅都必须已成对移除。
+    unmount();
+    input.value = "卸载后输入";
+    input.dispatchEvent(new Event("input"));
+    expect(onInputSpy).toHaveBeenCalledTimes(1);
+    setDraft("卸载后写入");
+    expect(input.value).toBe("卸载后输入");
+  });
+
+  it.skip("响应式 value 与当前 DOM 值相同时跳过重复写入，保留输入光标位置", () => {
+    const container = document.createElement("div");
+    const [draft, setDraft] = createSignal("hello");
+    let input!: HTMLInputElement;
+
+    const unmount = render(() => {
+      input = (
+        <input
+          type="text"
+          value={() => draft()}
+          onInput={(event) => setDraft(event.currentTarget.value)}
+        />
+      ) as HTMLInputElement;
+      return input;
+    }, container);
+
+    // 模拟用户在中间插入字符（光标停在第 2 位），随后 input 回调把相同字符串写回 signal。
+    input.value = "heXllo";
+    input.setSelectionRange(3, 3);
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!;
+    const valueSetterSpy = vi.spyOn(input, "value", "set").mockImplementation((next) => {
+      descriptor.set!.call(input, next);
+    });
+
+    input.dispatchEvent(new Event("input"));
+    // 因为 element.value 已经是 "heXllo"，effect 应跳过冗余赋值，不触发 setter 也不破坏光标。
+    expect(valueSetterSpy).not.toHaveBeenCalled();
+    expect(input.selectionStart).toBe(3);
+
+    unmount();
+  });
+
+  it.skip("支持复选框的静态与响应式 checked，并在卸载后成对移除 onChange 监听", () => {
+    const container = document.createElement("div");
+    const [done, setDone] = createSignal(false);
+    const onChangeSpy = vi.fn((checked: boolean) => setDone(checked));
+
+    const staticBox = (<input type="checkbox" checked={true} />) as HTMLInputElement;
+    expect(staticBox.checked).toBe(true);
+
+    let checkbox!: HTMLInputElement;
+    const unmount = render(() => {
+      checkbox = (
+        <input
+          type="checkbox"
+          checked={() => done()}
+          onChange={(event) => onChangeSpy(event.currentTarget.checked)}
+        />
+      ) as HTMLInputElement;
+      return checkbox;
+    }, container);
+
+    expect(checkbox.checked).toBe(false);
+
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event("change"));
+    expect(done()).toBe(true);
+    expect(onChangeSpy).toHaveBeenCalledTimes(1);
+
+    setDone(false);
+    expect(checkbox.checked).toBe(false);
+
+    unmount();
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event("change"));
+    expect(onChangeSpy).toHaveBeenCalledTimes(1);
+    setDone(true);
+    expect(checkbox.checked).toBe(true);
+  });
+
+  it.skip("在不支持的标签上传入表单属性时显式抛错", () => {
+    // @ts-expect-error: 刻意传入该标签不支持的属性。
+    expect(() => <div value="bad">内容</div>).toThrow(/value.*div/);
+    // @ts-expect-error: 刻意传入该标签不支持的属性。
+    expect(() => <div checked={true}>内容</div>).toThrow(/checked.*div/);
+    // @ts-expect-error: 刻意传入该标签不支持的属性。
+    expect(() => <div placeholder="bad">内容</div>).toThrow(/placeholder.*div/);
+  });
+
+  it.skip("输入框支持禁用，下拉框挂上选项后才绑定字符串值", () => {
+    const container = document.createElement("div");
+    const [locked, setLocked] = createSignal(true);
+    const [value, setValue] = createSignal("two");
+
+    // 选项文字与 value 不同，避免测试只读到浏览器默认选中的第一项。
+    const dispose = render(
+      () => (
+        <div>
+          <input disabled={locked} />
+          <select value={value}>
+            <option value="one">第一项</option>
+            <option value="two">第二项</option>
+          </select>
+        </div>
+      ),
+      container,
+    );
+    const input = container.querySelector("input")!;
+    const select = container.querySelector("select")!;
+    expect(input.disabled).toBe(true);
+    expect(select.value).toBe("two");
+
+    // 同一批节点继续响应 getter，卸载后停止应用变更。
+    setLocked(false);
+    setValue("one");
+    expect(input.disabled).toBe(false);
+    expect(select.value).toBe("one");
+    dispose();
+    setLocked(true);
+    setValue("two");
+    expect(input.disabled).toBe(false);
+    expect(select.value).toBe("one");
+  });
+
+  it.skip("ref 回调在属性与子节点完成后收到对应类型的真实 DOM 元素", () => {
+    const container = document.createElement("div");
+    let capturedInput: HTMLInputElement | undefined;
+    let capturedText = "";
+    let capturedId = "";
+
+    const unmount = render(
+      () => (
+        <div
+          id="box"
+          ref={(el) => {
+            capturedId = el.id;
+            capturedText = el.textContent ?? "";
+          }}
+        >
+          <span>已有子节点</span>
+          <input
+            type="text"
+            value="初始值"
+            ref={(el) => {
+              capturedInput = el;
+            }}
+          />
+        </div>
+      ),
+      container,
+    );
+
+    expect(capturedId).toBe("box");
+    expect(capturedText).toBe("已有子节点");
+    expect(capturedInput).toBeInstanceOf(HTMLInputElement);
+    expect(capturedInput?.value).toBe("初始值");
+
+    unmount();
+  });
+
+  it.skip("受控表单与 ref 配合：提交后清空草稿并重新聚焦输入框", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const added: string[] = [];
+
+    function Composer(): Node {
+      const [draft, setDraft] = createSignal("");
+      let inputRef: HTMLInputElement | undefined;
+
+      const submit = () => {
+        const text = draft().trim();
+        if (!text) return;
+        added.push(text);
+        setDraft("");
+        inputRef?.focus();
+      };
+
+      return (
+        <div>
+          <input
+            id="composer-input"
+            type="text"
+            ref={(el) => {
+              inputRef = el;
+            }}
+            value={() => draft()}
+            onInput={(event) => setDraft(event.currentTarget.value)}
+          />
+          <button
+            id="composer-submit"
+            type="button"
+            disabled={() => draft().trim().length === 0}
+            onClick={submit}
+          >
+            添加
+          </button>
+        </div>
+      );
+    }
+
+    const unmount = render(() => <Composer />, container);
+    try {
+      const input = container.querySelector<HTMLInputElement>("#composer-input")!;
+      const submitBtn = container.querySelector<HTMLButtonElement>("#composer-submit")!;
+
+      expect(submitBtn.disabled).toBe(true);
+
+      input.value = "写 Todo 应用";
+      input.dispatchEvent(new Event("input"));
+      expect(submitBtn.disabled).toBe(false);
+
+      submitBtn.click();
+      expect(added).toEqual(["写 Todo 应用"]);
+      expect(input.value).toBe("");
+      expect(submitBtn.disabled).toBe(true);
+      expect(document.activeElement).toBe(input);
+    } finally {
+      unmount();
+      container.remove();
+    }
   });
 });

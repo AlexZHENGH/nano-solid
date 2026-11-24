@@ -1,12 +1,25 @@
 import { createEffect, createRoot, onCleanup, type Dispose } from "./reactive.ts";
 
-/** 原生 HTML 元素支持的静态/响应式属性与点击事件。 */
-export type ElementProps = {
+/** 带有强类型 currentTarget 的 DOM 事件对象，便于在 onInput 与 onChange 中直接读取 value 或 checked。 */
+export type TargetedEvent<T extends HTMLElement> = Event & {
+  currentTarget: T;
+};
+
+/** 原生 HTML 元素支持的静态/响应式属性、表单绑定、事件回调与 ref。 */
+export type ElementProps<T extends HTMLElement = HTMLElement> = {
   id?: string;
   type?: string;
   class?: string | (() => string);
-  disabled?: boolean | (() => boolean);
+  "aria-label"?: string | (() => string);
+  // 只允许写入该标签真实存在、类型也一致的 DOM 属性。
+  placeholder?: T extends HTMLInputElement ? string : never;
+  disabled?: T extends { disabled: boolean } ? boolean | (() => boolean) : never;
+  value?: T extends { value: string } ? string | (() => string) : never;
+  checked?: T extends HTMLInputElement ? boolean | (() => boolean) : never;
   onClick?: (event: MouseEvent) => void;
+  onInput?: (event: TargetedEvent<T>) => void;
+  onChange?: (event: TargetedEvent<T>) => void;
+  ref?: (element: T) => void;
 };
 
 /**
@@ -54,16 +67,16 @@ function bindProperty<T>(value: T | (() => T), apply: (next: T) => void): void {
 }
 
 /**
- * 创建指定标签的原生 HTML 元素，应用静态/响应式属性与事件监听并挂载全部子节点；清理逻辑统一交给当前 Owner。
+ * 创建指定标签的原生 HTML 元素，应用静态/响应式属性、表单绑定、事件监听与 ref，并挂载全部子节点；清理逻辑统一交给当前 Owner。
  *
  * @param tag HTML 标签名。
- * @param props 元素的静态/响应式属性与事件回调。
+ * @param props 元素的静态/响应式属性、事件回调与 ref。
  * @param children 需要挂载到当前元素下的原生 DOM 子节点列表。
  * @returns 对应的原生 HTML 元素节点。
  */
 export function createElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
-  props: ElementProps = {},
+  props: ElementProps<HTMLElementTagNameMap[K]> = {},
   children: Node[] = [],
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -81,6 +94,15 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
       element.className = value;
     });
   }
+  if (props["aria-label"] !== undefined) {
+    bindProperty(props["aria-label"], (value) => {
+      element.setAttribute("aria-label", value);
+    });
+  }
+  if (props.placeholder !== undefined) {
+    // placeholder 仅对输入框有效，静态写入原生 DOM 属性。
+    // TODO: 校验 element instanceof HTMLInputElement（否则抛出含 placeholder 与 tag 的 Error），并写入 element.placeholder。
+  }
   if (props.onClick) {
     const handleClick = props.onClick;
     element.addEventListener("click", handleClick);
@@ -89,20 +111,40 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
       element.removeEventListener("click", handleClick);
     });
   }
+  if (props.onInput) {
+    // 绑定 input 事件并在 onCleanup 中成对移除，供受控输入框实时同步用户输入。
+    // TODO: 登记 addEventListener("input", handleInput) 并通过 onCleanup 成对 removeEventListener。
+  }
+  if (props.onChange) {
+    // 绑定 change 事件并在 onCleanup 中成对移除，供复选框等表单控件监听状态变更。
+    // TODO: 登记 addEventListener("change", handleChange) 并通过 onCleanup 成对 removeEventListener。
+  }
   if (props.disabled !== undefined) {
-    // 仅按钮元素支持 disabled 属性，对非按钮标签提前显式报错，按钮则通过 bindProperty 写入 element.disabled。
-    if (!(element instanceof HTMLButtonElement)) {
+    // 按原生属性类型检查，输入框、按钮等拥有布尔 disabled 的元素都可以绑定。
+    if (!("disabled" in element) || typeof element.disabled !== "boolean") {
       throw new Error(`The "disabled" prop is not supported on <${tag}>`);
     }
     bindProperty(props.disabled, (value) => {
       element.disabled = value;
     });
   }
+  if (props.checked !== undefined) {
+    // 仅输入框支持 checked 属性，直接写入布尔属性 element.checked 以支持 true / false 双向切换。
+    // TODO: 校验 element instanceof HTMLInputElement（否则抛出 Error(`The "checked" prop is not supported on <${tag}>`)），再用 bindProperty 写入 element.checked。
+  }
 
   // 依次把每个子 Node 挂进当前元素；所有子节点的订阅清理已由所有权树统一接管。
   for (const child of children) {
     element.appendChild(child);
   }
+
+  if (props.value !== undefined) {
+    // 选项先挂载才能设置 select.value；同值不写入能保留输入框的光标。
+    // TODO: 校验 "value" in element 且 typeof element.value === "string"（否则抛出 Error(`The "value" prop is not supported on <${tag}>`)），再用 bindProperty 在值不同时写入 element.value。
+  }
+
+  // 所有属性、事件与子节点准备就绪后再触发 ref 回调，让外部拿到完整初始化的真实元素引用。
+  // TODO: 若 props.ref 存在，调用 props.ref(node)。
 
   return node;
 }
