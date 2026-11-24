@@ -75,7 +75,7 @@ describe("响应式文本节点", () => {
 });
 
 describe("元素树与递归释放", () => {
-  it.skip("按顺序挂载静态和响应式子节点，父节点释放时同步停止子节点更新", () => {
+  it("按顺序挂载静态和响应式子节点，父节点释放时同步停止子节点更新", () => {
     const [count, setCount] = createSignal(0);
     const getValue = vi.fn(() => String(count()));
 
@@ -96,7 +96,7 @@ describe("元素树与递归释放", () => {
     expect(getValue).toHaveBeenCalledTimes(2);
   });
 
-  it.skip("释放根节点时会沿元素树递归释放深层后代订阅", () => {
+  it("释放根节点时会沿元素树递归释放深层后代订阅", () => {
     const [count, setCount] = createSignal(0);
     const getValue = vi.fn(() => String(count()));
 
@@ -116,7 +116,7 @@ describe("元素树与递归释放", () => {
     expect(getValue).toHaveBeenCalledTimes(2);
   });
 
-  it.skip("允许不传子节点，且重复释放父元素保持幂等", () => {
+  it("允许不传子节点，且重复释放父元素保持幂等", () => {
     const empty = createRenderableElement("div");
 
     expect(empty.node.childNodes.length).toBe(0);

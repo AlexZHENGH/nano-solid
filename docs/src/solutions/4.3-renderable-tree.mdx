@@ -1,0 +1,33 @@
+在 `createRenderableElement` 里把两件事补齐即可：构造时遍历 `children` 依次挂载，释放时遍历 `children` 依次调用 `child.dispose()`：
+
+```ts
+export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  children: Renderable<Node>[] = [],
+): Renderable<HTMLElementTagNameMap[K]> {
+  const node = createElement(tag);
+
+  // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
+  for (const child of children) {
+    mount(node, child.node);
+  }
+
+  function dispose(): void {
+    // 释放父节点时把清理沿着树传给所有子节点，确保深层响应式文本也会退订。
+    for (const child of children) {
+      child.dispose();
+    }
+  }
+
+  return { node, dispose };
+}
+```
+
+因为每个子节点本身也是 `Renderable`（可能是静态文本、响应式文本，或是嵌套的另一个元素），顶层调一次 `dispose()` 就会沿树递归清理整棵子树的所有订阅，而且每个叶子节点的 `dispose()` 都已经幂等，重复释放父元素也完全安全。
+
+保存后运行 `pnpm dev` 可以看到完整的计数器卡片正常渲染与交互，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build` 27 条测试和构建全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 4.3-learn 4.3-solution -- src
+```

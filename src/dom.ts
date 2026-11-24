@@ -75,17 +75,20 @@ export function createStaticText(value: string): Renderable<Text> {
  */
 export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   children: Renderable<Node>[] = [],
 ): Renderable<HTMLElementTagNameMap[K]> {
   const node = createElement(tag);
 
   // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
-  // TODO: 遍历 children，调用 mount(node, child.node) 挂载全部子节点。
+  for (const child of children) {
+    mount(node, child.node);
+  }
 
   function dispose(): void {
     // 释放父节点时把清理沿着树传给所有子节点，确保深层响应式文本也会退订。
-    // TODO: 遍历 children，逐个调用 child.dispose()。
+    for (const child of children) {
+      child.dispose();
+    }
   }
 
   return { node, dispose };
