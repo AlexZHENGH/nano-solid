@@ -162,7 +162,6 @@ export function For<T, K = T>(props: ForProps<T, K>): Node {
   }
 
   /** 在独立的 createRoot 中新建一行，并用专属起止 Comment 锚点包住该行的全部动态节点。 */
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   function createRowEntry(key: unknown, initialItem: T, initialIndex: number): RowEntry<T> {
     // 每行自带一对锚点装进临时 Fragment，方便后续整体首次插入与按区间移动/删除。
     const rowStart = document.createComment("for-item-start");
@@ -196,7 +195,6 @@ export function For<T, K = T>(props: ForProps<T, K>): Node {
   }
 
   /** 把单行（新建或已挂载）摆放到指定参照节点之前；若该行已处于正确位置则跳过 DOM 移动。 */
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   function placeRowBefore(parent: Node, entry: RowEntry<T>, before: Node): void {
     // 首次挂载的新行：一次性把暂存 Fragment 插入到 before 之前，随后清空 initialFragment 标记已挂载。
     if (entry.initialFragment) {
@@ -278,8 +276,69 @@ export function For<T, K = T>(props: ForProps<T, K>): Node {
     }
 
     // 阶段 1：把 activeRows 按 key 放进旧行队列 Map<unknown, RowEntry<T>[]>，遍历 nextItems 尝试从队头复用，未命中则调用 createRowEntry；若任意工厂抛错，逆序 disposeRow 回滚本轮新建行再重抛。
+    // 1.1 按 key 建立旧行 FIFO 队列：用数组而不是单值，确保重复原始值（如 ["a", "b", "a"]）按出现顺序逐个配对。
+    const oldPool = new Map<unknown, RowEntry<T>[]>();
+    for (const entry of activeRows) {
+      const bucket = oldPool.get(entry.key);
+      if (bucket) {
+        bucket.push(entry);
+      } else {
+        oldPool.set(entry.key, [entry]);
+      }
+    }
+
+    const nextRows: RowEntry<T>[] = [];
+    // 复用行的 item / index 更新先暂存，等全部新行建完后再统一写入，防止中途抛错污染旧行状态。
+    const reusedUpdates: Array<{ entry: RowEntry<T>; item: T; index: number }> = [];
+    // 记录本轮新建的行，若后续某行工厂抛错，用于逆序回滚本轮新建的作用域。
+    const createdRows: RowEntry<T>[] = [];
+
+    // 1.2 依次为新列表每一项匹配旧行或创建新行（此阶段不改动真实 DOM）。
+    try {
+      for (const [index, item] of nextItems.entries()) {
+        const key = props.getKey ? props.getKey(item) : item;
+        const reused = oldPool.get(key)?.shift();
+        if (reused) {
+          nextRows.push(reused);
+          reusedUpdates.push({ entry: reused, item, index });
+        } else {
+          const created = createRowEntry(key, item, index);
+          createdRows.push(created);
+          nextRows.push(created);
+        }
+      }
+    } catch (error) {
+      // 任意新行构造失败时按 LIFO 逆序释放本轮已建新行，保持原有画面与旧行完全不受影响。
+      for (const created of createdRows.reverse()) {
+        disposeRow(created);
+      }
+      throw error;
+    }
+
     // 阶段 2：调用 clearFallback() 并释放旧行队列里剩余未复用的行；从右往左以 end 为初始游标调用 placeRowBefore 原地重排；更新 activeRows，最后为复用行调用 setItem 和 setIndex。
-    // TODO: 实现阶段 1（按 key 队列复用与抛错回滚）与阶段 2（清理未复用旧行、从右往左原地重排并更新复用行的 item / index 信号）。
+    // 2.1 清掉空列表 fallback，并释放 oldPool 中剩余未被复用的旧行（停止其内部订阅并移除 DOM）。
+    clearFallback();
+    for (const leftoverBucket of oldPool.values()) {
+      for (const unused of leftoverBucket) {
+        disposeRow(unused);
+      }
+    }
+
+    // 2.2 从右往左以固定的外层 end 锚点为初始参照，顺次把每行摆到 cursor 之前（已在位的静止行会跳过移动）。
+    let cursor: Node = end;
+    for (const entry of [...nextRows].reverse()) {
+      placeRowBefore(parent, entry, cursor);
+      // 当前行就位后，其起始锚点立刻成为左边下一行的参照点。
+      cursor = entry.start;
+    }
+
+    // 2.3 提交最新的活跃行列表，并把新对象与新下标写入各复用行的响应式信号。
+    activeRows = nextRows;
+
+    for (const update of reusedUpdates) {
+      update.entry.setItem(update.item);
+      update.entry.setIndex(update.index);
+    }
   });
 
   return fragment;

@@ -1,0 +1,81 @@
+在 `src/control-flow.ts` 的 `For` 中补齐两阶段协调逻辑，并删掉两行临时 `oxlint-disable-next-line` 注释：
+
+```ts
+// 阶段 1：把 activeRows 按 key 放进旧行队列 Map<unknown, RowEntry<T>[]>，遍历 nextItems 尝试从队头复用，未命中则调用 createRowEntry；若任意工厂抛错，逆序 disposeRow 回滚本轮新建行再重抛。
+// 1.1 按 key 建立旧行 FIFO 队列：用数组而不是单值，确保重复原始值（如 ["a", "b", "a"]）按出现顺序逐个配对。
+const oldPool = new Map<unknown, RowEntry<T>[]>();
+for (const entry of activeRows) {
+  const bucket = oldPool.get(entry.key);
+  if (bucket) {
+    bucket.push(entry);
+  } else {
+    oldPool.set(entry.key, [entry]);
+  }
+}
+
+const nextRows: RowEntry<T>[] = [];
+// 复用行的 item / index 更新先暂存，等全部新行建完后再统一写入，防止中途抛错污染旧行状态。
+const reusedUpdates: Array<{ entry: RowEntry<T>; item: T; index: number }> = [];
+// 记录本轮新建的行，若后续某行工厂抛错，用于逆序回滚本轮新建的作用域。
+const createdRows: RowEntry<T>[] = [];
+
+// 1.2 依次为新列表每一项匹配旧行或创建新行（此阶段不改动真实 DOM）。
+try {
+  for (const [index, item] of nextItems.entries()) {
+    const key = props.getKey ? props.getKey(item) : item;
+    const reused = oldPool.get(key)?.shift();
+    if (reused) {
+      nextRows.push(reused);
+      reusedUpdates.push({ entry: reused, item, index });
+    } else {
+      const created = createRowEntry(key, item, index);
+      createdRows.push(created);
+      nextRows.push(created);
+    }
+  }
+} catch (error) {
+  // 任意新行构造失败时按 LIFO 逆序释放本轮已建新行，保持原有画面与旧行完全不受影响。
+  for (const created of createdRows.reverse()) {
+    disposeRow(created);
+  }
+  throw error;
+}
+
+// 阶段 2：调用 clearFallback() 并释放旧行队列里剩余未复用的行；从右往左以 end 为初始游标调用 placeRowBefore 原地重排；更新 activeRows，最后为复用行调用 setItem 和 setIndex。
+// 2.1 清掉空列表 fallback，并释放 oldPool 中剩余未被复用的旧行（停止其内部订阅并移除 DOM）。
+clearFallback();
+for (const leftoverBucket of oldPool.values()) {
+  for (const unused of leftoverBucket) {
+    disposeRow(unused);
+  }
+}
+
+// 2.2 从右往左以固定的外层 end 锚点为初始参照，顺次把每行摆到 cursor 之前（已在位的静止行会跳过移动）。
+let cursor: Node = end;
+for (const entry of [...nextRows].reverse()) {
+  placeRowBefore(parent, entry, cursor);
+  // 当前行就位后，其起始锚点立刻成为左边下一行的参照点。
+  cursor = entry.start;
+}
+
+// 2.3 提交最新的活跃行列表，并把新对象与新下标写入各复用行的响应式信号。
+activeRows = nextRows;
+
+for (const update of reusedUpdates) {
+  update.entry.setItem(update.item);
+  update.entry.setIndex(update.index);
+}
+```
+
+这里有三个关键设计保证了复杂边界全部稳定通过：
+
+1. **队列配对兼容重复 key**：`oldPool` 用 `Map<unknown, RowEntry<T>[]>` 配合 `shift()` 按旧出现顺序复用，即便数组里出现重复字符串 `["a", "b", "a"]` 也不会互相覆盖。
+2. **先建齐再提交**：把 `reusedUpdates` 延后到所有新行创建成功之后再写入，任意新行工厂抛错时只需逆序清理 `createdRows`，原有已挂载行的文本和状态完全不受干扰。
+3. **从右往左重排 + `entry.end.nextSibling === before` 守卫**：像 `[A, B, C] -> [A, C, B]` 这样只交换尾部两项时，首行 `A` 的结束锚点紧挨着更新后的 `cursor`，`placeRowBefore` 直接跳过移动，输入框焦点完好无损。
+
+保存并启用全部 10 条测试后运行 `pnpm format && pnpm check && pnpm test:run`，81 条测试全部通过。
+
+```sh
+# 查看 src 目录下从题目到解答的全部改动。
+git diff 7.2-learn 7.2-solution -- src
+```

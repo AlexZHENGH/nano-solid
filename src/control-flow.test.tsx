@@ -238,7 +238,7 @@ describe("条件渲染 <Show>", () => {
 describe("列表渲染 <For>", () => {
   type Todo = { id: number; text: string; completed: boolean };
 
-  it.skip("按 getKey 复用已有 DOM 节点，不可变更新对象时原地更新内容而不重建行", () => {
+  it("按 getKey 复用已有 DOM 节点，不可变更新对象时原地更新内容而不重建行", () => {
     const container = createElement("div");
     const [todos, setTodos] = createSignal<Todo[]>([
       { id: 1, text: "写 memo", completed: false },
@@ -282,7 +282,7 @@ describe("列表渲染 <For>", () => {
     unmount();
   });
 
-  it.skip("筛选移除项时释放被删行的 onCleanup 与 effect，并保留其余行实例", () => {
+  it("筛选移除项时释放被删行的 onCleanup 与 effect，并保留其余行实例", () => {
     const container = createElement("div");
     const [todos, setTodos] = createSignal<Todo[]>([
       { id: 1, text: "任务一", completed: false },
@@ -319,7 +319,7 @@ describe("列表渲染 <For>", () => {
     expect(cleanedIds).toEqual([1, 2]);
   });
 
-  it.skip("重排列表时复用节点与输入框内容、更新 index()，且静止行跳过 DOM 移动保持焦点", () => {
+  it("重排列表时复用节点与输入框内容、更新 index()，且静止行跳过 DOM 移动保持焦点", () => {
     const container = createElement("div");
     document.body.appendChild(container);
     const [items, setItems] = createSignal([
@@ -387,7 +387,7 @@ describe("列表渲染 <For>", () => {
     }
   });
 
-  it.skip("不传 getKey 时默认按元素本身复用，并兼容数组中的重复值", () => {
+  it("不传 getKey 时默认按元素本身复用，并兼容数组中的重复值", () => {
     const container = createElement("div");
     const [tags, setTags] = createSignal(["a", "b", "a"]);
     const creates = vi.fn();
@@ -423,7 +423,7 @@ describe("列表渲染 <For>", () => {
     unmount();
   });
 
-  it.skip("空列表与非空列表切换时懒挂载并正确清理 fallback", () => {
+  it("空列表与非空列表切换时懒挂载并正确清理 fallback", () => {
     const container = createElement("div");
     const [items, setItems] = createSignal<string[]>([]);
     const fallbackMount = vi.fn();
@@ -469,7 +469,7 @@ describe("列表渲染 <For>", () => {
     expect(fallbackCleanup).toHaveBeenCalledTimes(2);
   });
 
-  it.skip("行内嵌套 <Show> 切换分支后，重排与删除仍能完整移动和清理当前行区间", () => {
+  it("行内嵌套 <Show> 切换分支后，重排与删除仍能完整移动和清理当前行区间", () => {
     const container = createElement("div");
     const [items, setItems] = createSignal([
       { id: 1, label: "一" },
@@ -516,7 +516,7 @@ describe("列表渲染 <For>", () => {
     unmount();
   });
 
-  it.skip("新行工厂中途抛错时回滚本轮已建新行且不改动已有旧行", () => {
+  it("新行工厂中途抛错时回滚本轮已建新行且不改动已有旧行", () => {
     const container = createElement("div");
     const [items, setItems] = createSignal([{ id: 1, label: "旧行" }]);
     const newRowCleanup = vi.fn();
@@ -565,7 +565,7 @@ describe("列表渲染 <For>", () => {
     unmount();
   });
 
-  it.skip("<For> 直接作为 render 根节点从空列表增行并卸载后，不残留任何锚点与节点", () => {
+  it("<For> 直接作为 render 根节点从空列表增行并卸载后，不残留任何锚点与节点", () => {
     const container = createElement("div");
     const sibling = createElement("span", {}, [createText("容器兄弟")]);
     container.appendChild(sibling);
