@@ -2,6 +2,7 @@ import {
   createReactiveText,
   createRenderableElement,
   createStaticText,
+  type ElementProps,
   type Renderable,
 } from "./dom.ts";
 
@@ -19,10 +20,10 @@ export type JSXChild =
   | (() => string | number)
   | JSXChild[];
 
-/** 原生 HTML 标签的基础 JSX 属性。 */
+/** 原生 HTML 标签接收的 JSX 属性：元素属性与可选 children。 */
 export type Props = {
   children?: JSXChild;
-};
+} & ElementProps;
 
 /**
  * 运行时类型守卫：判断任意子节点值是否已经是 Renderable 对象。
@@ -84,7 +85,7 @@ function normalizeChildren(children: JSXChild): Renderable[] {
  * @returns 对应的元素 Renderable。
  */
 export function jsx<K extends Tag>(tag: K, props: Props): Renderable<HTMLElementTagNameMap[K]> {
-  return createRenderableElement(tag, normalizeChildren(props.children));
+  return createRenderableElement(tag, props, normalizeChildren(props.children));
 }
 
 /** 多子节点 JSX 表达式与单子节点共享同一套归一化逻辑。 */

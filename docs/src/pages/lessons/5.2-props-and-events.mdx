@@ -1,0 +1,61 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "5.2 静态属性与事件绑定"
+description: "升级 createRenderableElement 接收 props 对象，支持静态 id、type、class 以及成对清理的 onClick 监听。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+[5.1](../5.1-jsx-runtime/) 让我们写出了 `<p>信号当前值：<code>{() => count()}</code></p>` 这样的嵌套 JSX，但只要想给元素加个 `class`、设个 `type="button"` 或者绑一个 `onClick`，`src/main.tsx` 还是得先拿出 `node` 再手动赋值，按钮也还得靠辅助函数 `createButton` 包装。
+
+这一节我们希望直接把静态属性和点击事件写在 JSX 标签上：
+
+```tsx
+// 我们期望直接这样写按钮与属性
+<button id="inc-btn" type="button" class="ns-btn" onClick={() => setCount(count() + 1)}>
+  +1
+</button>;
+
+// 经过 5.1 的 JSX 转换后，运行时实际收到的是：
+jsx("button", {
+  id: "inc-btn",
+  type: "button",
+  class: "ns-btn",
+  onClick: () => setCount(count() + 1),
+  children: "+1",
+});
+```
+
+`props` 对象里除了 `5.1` 已经消费掉的 `children`，剩下的 `id`、`type`、`class` 和 `onClick` 都需要交给 `createRenderableElement` 来落到真实 DOM 上。
+
+## 给 `createRenderableElement` 加上 `props` 参数
+
+我们把 `src/dom.ts` 中 `createRenderableElement` 的参数调整为 `(tag, props, children)`：
+
+```ts
+export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  props: ElementProps = {},
+  children: Renderable[] = [],
+): Renderable<HTMLElementTagNameMap[K]>;
+```
+
+`props` 和 `children` 都带有默认值，所以空元素仍然可以直接写 `createRenderableElement("hr")`，而 `src/jsx-runtime.ts` 只需要把收到的 `props` 原样透传给 `createRenderableElement(tag, props, normalizeChildren(props.children))`。
+
+本节先支持最常用的三类静态属性和一类事件：
+
+- **`id`、`class`、`type`**：按需写入 `node.id`、`node.className` 与 `node.setAttribute("type", props.type)`。
+- **`onClick`**：在构造阶段调用 `node.addEventListener("click", onClick)`，并在返回的 `dispose()` 里用同一个函数引用调用 `node.removeEventListener("click", onClick)`，保证整棵树卸载时不会残留任何事件监听。
+
+> [!NOTE]
+> 注意区分两种“传给属性的函数”：上面例子里的 `onClick` 接收的是**事件回调**，只在用户点击时由浏览器调用，绝对不能放进 `createEffect` 里执行。下一节要实现的动态 `class={() => ...}` 和 `disabled={() => ...}` 才是**响应式属性 getter**，需要交给 `createEffect` 追踪并同步到 DOM。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/5.2 5.2-learn
+> ```
+>
+> `src/main.tsx` 已经把计数器视图和按钮全部改写成带 `class`、`type` 与 `onClick` 的 JSX。起手运行 `pnpm dev` 打开页面会看到样式全部丢失、点击按钮也没有反应（因为 `createRenderableElement` 还没有处理 `props`）。补齐 `src/dom.ts` 中静态属性设置与 `onClick` 的成对绑定和清理，让页面恢复样式与完整交互，并确保 `pnpm format && pnpm check && pnpm test:run && pnpm build` 全部通过。
+
+<LessonSolution slug="5.2-props-and-events" tag="5.2-solution" />

@@ -6,6 +6,14 @@ export type Renderable<T extends Node = Node> = {
   dispose: Dispose;
 };
 
+/** 原生 HTML 元素支持的静态属性与点击事件。 */
+export type ElementProps = {
+  id?: string;
+  type?: string;
+  class?: string;
+  onClick?: (event: MouseEvent) => void;
+};
+
 /**
  * 创建指定标签名的 HTML 元素，并保留对应的 DOM 元素类型。
  *
@@ -67,25 +75,34 @@ export function createStaticText(value: string): Renderable<Text> {
 }
 
 /**
- * 创建指定标签的 HTML 元素，挂载全部子 Renderable，并返回能递归释放整棵子树的 Renderable。
+ * 创建指定标签的 HTML 元素，应用属性与事件监听、挂载全部子节点，并返回能递归释放整棵子树的 Renderable。
  *
  * @param tag HTML 标签名。
+ * @param props 元素的静态属性与事件回调。
  * @param children 需要挂载到当前元素下的子节点列表。
  * @returns 包含当前元素节点与级联释放函数的 Renderable。
  */
 export function createRenderableElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
-  children: Renderable<Node>[] = [],
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  props: ElementProps = {},
+  children: Renderable[] = [],
 ): Renderable<HTMLElementTagNameMap[K]> {
   const node = createElement(tag);
+  // 宽化为 HTMLElement，使 addEventListener("click", ...) 命中 MouseEvent 重载。
+  const element: HTMLElement = node;
+
+  // 把静态属性（id、class、type）写入元素，并在提供 onClick 时绑定点击监听。
+  // TODO: 按需设置 element.id、element.className、element.setAttribute("type", props.type)，并绑定 props.onClick 监听。
 
   // 依次把每个子 Renderable 持有的原生 DOM 节点挂进当前元素。
   for (const child of children) {
-    mount(node, child.node);
+    mount(element, child.node);
   }
 
   function dispose(): void {
-    // 释放父节点时把清理沿着树传给所有子节点，确保深层响应式文本也会退订。
+    // 释放元素时先成对移除 click 监听，再沿树递归释放所有子节点。
+    // TODO: 若存在 props.onClick，调用 element.removeEventListener("click", props.onClick)。
     for (const child of children) {
       child.dispose();
     }

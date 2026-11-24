@@ -1,41 +1,6 @@
-// 浏览器入口：已切换到 TSX，先用 JSX 改写占位提示和底部观察行。
-import {
-  createElement,
-  createReactiveText,
-  createRenderableElement,
-  createStaticText,
-  render,
-  type Renderable,
-} from "./dom.ts";
+// 浏览器入口：使用 JSX 声明静态属性与 onClick 事件，动态 class 暂由外部 createEffect 更新。
+import { createElement, render, type Renderable } from "./dom.ts";
 import { createEffect, createSignal, type Dispose } from "./reactive.ts";
-
-/**
- * 创建一个带点击事件和成对清理逻辑的按钮 Renderable。
- *
- * @param label 按钮显示的静态文案。
- * @param onClick 点击按钮时触发的回调。
- * @param className 按钮样式类，默认使用标准 .ns-btn。
- * @returns 包含按钮节点及事件解绑逻辑的 Renderable。
- */
-function createButton(
-  label: string,
-  onClick: () => void,
-  className = "ns-btn",
-): Renderable<HTMLButtonElement> {
-  const button = createRenderableElement("button", [createStaticText(label)]);
-  button.node.type = "button";
-  button.node.className = className;
-  button.node.addEventListener("click", onClick);
-
-  return {
-    node: button.node,
-    dispose() {
-      // 释放按钮时先移除事件监听，再释放按钮内部子节点。
-      button.node.removeEventListener("click", onClick);
-      button.dispose();
-    },
-  };
-}
 
 /**
  * 组装计数器核心视图树，所有响应式文本与按钮事件都随根 Renderable 一起释放。
@@ -49,43 +14,43 @@ function createCounterView(
   count: () => number,
   setCount: (next: number) => void,
   onTextUpdate: () => void,
-): Renderable<HTMLDivElement> {
-  // 计数展示区：左侧静态标签，右侧用 createReactiveText 原地更新同一个 Text 节点。
-  const label = createRenderableElement("span", [createStaticText("当前计数")]);
-  label.node.className = "ns-counter-label";
-
-  const value = createRenderableElement("span", [
-    createReactiveText(() => {
-      const current = count();
-      onTextUpdate();
-      return String(current);
-    }),
-  ]);
-  value.node.className = "ns-counter-value";
-
-  const display = createRenderableElement("div", [label, value]);
-  display.node.className = "ns-counter-display";
-
-  // 计数器操作按钮：只更新 count 信号，视图刷新交给上面的响应式文本节点。
-  const actions = createRenderableElement("div", [
-    createButton("+1", () => setCount(count() + 1)),
-    createButton("-1", () => setCount(count() - 1)),
-    createButton("重置", () => setCount(0)),
-  ]);
-  actions.node.className = "ns-actions";
-
-  return createRenderableElement("div", [display, actions]);
+): Renderable {
+  return (
+    <div>
+      {/* 计数展示区：左侧静态标签，右侧用函数子节点原地刷新同一个 Text 节点。 */}
+      <div class="ns-counter-display">
+        <span class="ns-counter-label">当前计数</span>
+        <span class="ns-counter-value">
+          {() => {
+            const current = count();
+            onTextUpdate();
+            return current;
+          }}
+        </span>
+      </div>
+      {/* 操作按钮栏：通过 JSX 直接声明 type、class 与 onClick，卸载时自动成对解绑。 */}
+      <div class="ns-actions">
+        <button type="button" class="ns-btn" onClick={() => setCount(count() + 1)}>
+          +1
+        </button>
+        <button type="button" class="ns-btn" onClick={() => setCount(count() - 1)}>
+          -1
+        </button>
+        <button type="button" class="ns-btn" onClick={() => setCount(0)}>
+          重置
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
- * 组装卸载后显示在容器内的虚线占位提示视图（使用 JSX 创建段落元素）。
+ * 组装卸载后显示在容器内的虚线占位提示视图。
  *
  * @returns 展示“已卸载”说明的段落 Renderable。
  */
 function createEmptyView(): Renderable {
-  const empty = <p>计数器已从容器移除，对应的订阅也已全部释放。</p>;
-  (empty.node as HTMLParagraphElement).className = "ns-empty";
-  return empty;
+  return <p class="ns-empty">计数器已从容器移除，对应的订阅也已全部释放。</p>;
 }
 
 const app = document.querySelector<HTMLElement>("#app");
@@ -102,78 +67,60 @@ if (app) {
     setTextUpdates(updateCount);
   };
 
-  // 2. 顶部标题栏与挂载状态徽章：徽章文案和配色随 mounted 信号自动切换。
-  const title = <h1>nano-solid 计数器</h1>;
-  (title.node as HTMLHeadingElement).className = "ns-card-title";
-
-  const badge = createRenderableElement("span", [
-    createReactiveText(() => (mounted() ? "已挂载" : "已卸载")),
-  ]);
-  createEffect(() => {
-    badge.node.className = mounted() ? "ns-badge" : "ns-badge ns-badge-muted";
-  });
-
-  const header = createRenderableElement("div", [title, badge]);
-  header.node.className = "ns-card-header";
-
-  // 3. 计数器独立挂载宿主与分割线：卸载时只操作 host 内部，不影响外层卡片壳。
+  // 2. 独立挂载宿主：卸载时只操作 host 内部，不影响外层卡片壳。
   const host = createElement("div");
 
-  const divider = <hr />;
-  (divider.node as HTMLHRElement).className = "ns-divider";
-
-  // 4. 底部控制栏：一个卸载/重新挂载切换按钮，加一个绕过计数器直接改状态的外部写入按钮。
-  const toggleButton = createRenderableElement("button", [
-    createReactiveText(() => (mounted() ? "调用 dispose() 卸载" : "重新挂载")),
-  ]);
-  toggleButton.node.type = "button";
+  // 3. 挂载状态徽章与卸载切换按钮：目前动态 class 仍由外部 createEffect 更新。
+  const badge = <span>{() => (mounted() ? "已挂载" : "已卸载")}</span>;
   createEffect(() => {
-    toggleButton.node.className = mounted() ? "ns-btn ns-btn-danger" : "ns-btn";
+    (badge.node as HTMLSpanElement).className = mounted() ? "ns-badge" : "ns-badge ns-badge-muted";
   });
 
-  const externalWriteButton = createRenderableElement("button", [
-    createReactiveText(() => `外部写入 setCount(${count() + 1})`),
-  ]);
-  externalWriteButton.node.type = "button";
-  externalWriteButton.node.className = "ns-btn";
-  externalWriteButton.node.addEventListener("click", () => setCount(count() + 1));
-
-  const controls = createRenderableElement("div", [toggleButton, externalWriteButton]);
-  controls.node.className = "ns-actions";
-
-  // 5. 底部观察行：改用 JSX 数组与函数子节点同时展示信号当前值和文本更新次数。
-  const meta = (
-    <p>
-      信号当前值：<code>{() => count()}</code>，响应式文本更新次数：
-      <code>{() => textUpdates()}</code>
-    </p>
+  let unmountActiveView: Dispose | undefined;
+  const toggleButton = (
+    <button
+      type="button"
+      onClick={() => {
+        unmountActiveView?.();
+        const nextMounted = !mounted();
+        setMounted(nextMounted);
+        unmountActiveView = render(
+          nextMounted ? createCounterView(count, setCount, recordTextUpdate) : createEmptyView(),
+          host,
+        );
+      }}
+    >
+      {() => (mounted() ? "调用 dispose() 卸载" : "重新挂载")}
+    </button>
   );
-  (meta.node as HTMLParagraphElement).className = "ns-meta";
+  createEffect(() => {
+    (toggleButton.node as HTMLButtonElement).className = mounted()
+      ? "ns-btn ns-btn-danger"
+      : "ns-btn";
+  });
 
-  // 6. 组装外层卡片并挂入 #app，再把初始计数器视图挂进独立宿主 host。
-  const card = createRenderableElement("section", [
-    header,
-    { node: host, dispose: () => {} },
-    divider,
-    controls,
-    meta,
-  ]);
-  card.node.className = "ns-card";
+  // 4. 用 JSX 拼装外层卡片并挂入 #app，再把初始计数器视图挂进独立宿主 host。
+  const card = (
+    <section class="ns-card">
+      <div class="ns-card-header">
+        <h1 class="ns-card-title">nano-solid 计数器</h1>
+        {badge}
+      </div>
+      {{ node: host, dispose: () => {} }}
+      <hr class="ns-divider" />
+      <div class="ns-actions">
+        {toggleButton}
+        <button type="button" class="ns-btn" onClick={() => setCount(count() + 1)}>
+          {() => `外部写入 setCount(${count() + 1})`}
+        </button>
+      </div>
+      <p class="ns-meta">
+        信号当前值：<code>{() => count()}</code>，响应式文本更新次数：
+        <code>{() => textUpdates()}</code>
+      </p>
+    </section>
+  );
+
   render(card, app);
-
-  let unmountActiveView: Dispose = render(
-    createCounterView(count, setCount, recordTextUpdate),
-    host,
-  );
-
-  // 7. 点击切换按钮：先调用上一次 render 返回的卸载函数，再按新状态挂载计数器或占位提示。
-  toggleButton.node.addEventListener("click", () => {
-    unmountActiveView();
-    const nextMounted = !mounted();
-    setMounted(nextMounted);
-    unmountActiveView = render(
-      nextMounted ? createCounterView(count, setCount, recordTextUpdate) : createEmptyView(),
-      host,
-    );
-  });
+  unmountActiveView = render(createCounterView(count, setCount, recordTextUpdate), host);
 }

@@ -65,3 +65,65 @@ describe("JSX 运行时与子节点归一化", () => {
     expect(() => jsx("div", { children: {} as never })).toThrow(/Unsupported JSX child/);
   });
 });
+
+describe("静态属性与事件绑定", () => {
+  it.skip("将静态 id、type 与 class 属性写入真实 DOM 元素", () => {
+    const view = (
+      <button id="submit-btn" type="button" class="ns-btn">
+        提交
+      </button>
+    );
+
+    const button = view.node as HTMLButtonElement;
+    expect(button.id).toBe("submit-btn");
+    expect(button.type).toBe("button");
+    expect(button.className).toBe("ns-btn");
+    expect(button.textContent).toBe("提交");
+  });
+
+  it.skip("绑定 onClick 回调并在点击时驱动信号更新视图", () => {
+    const container = document.createElement("div");
+    const [count, setCount] = createSignal(0);
+
+    const view = (
+      <div>
+        <span id="value">{() => count()}</span>
+        <button id="inc" type="button" onClick={() => setCount(count() + 1)}>
+          +1
+        </button>
+      </div>
+    );
+
+    const unmount = render(view, container);
+    const value = container.querySelector<HTMLSpanElement>("#value")!;
+    const button = container.querySelector<HTMLButtonElement>("#inc")!;
+
+    expect(value.textContent).toBe("0");
+    button.click();
+    button.click();
+    expect(value.textContent).toBe("2");
+
+    unmount();
+  });
+
+  it.skip("卸载后成对移除 onClick 监听，不再触发点击回调", () => {
+    const container = document.createElement("div");
+    const handleClick = vi.fn();
+
+    const view = (
+      <button type="button" onClick={handleClick}>
+        点我
+      </button>
+    );
+    const button = view.node as HTMLButtonElement;
+    const unmount = render(view, container);
+
+    button.click();
+    expect(handleClick).toHaveBeenCalledTimes(1);
+
+    unmount();
+    // 即使保留了按钮引用并在卸载后触发点击，监听也已成对移除。
+    button.click();
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+});

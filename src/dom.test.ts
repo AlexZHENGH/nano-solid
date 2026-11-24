@@ -80,7 +80,7 @@ describe("元素树与递归释放", () => {
     const [count, setCount] = createSignal(0);
     const getValue = vi.fn(() => String(count()));
 
-    const parent = createRenderableElement("div", [
+    const parent = createRenderableElement("div", {}, [
       createStaticText("Count: "),
       createReactiveText(getValue),
     ]);
@@ -101,8 +101,8 @@ describe("元素树与递归释放", () => {
     const [count, setCount] = createSignal(0);
     const getValue = vi.fn(() => String(count()));
 
-    const root = createRenderableElement("div", [
-      createRenderableElement("p", [createReactiveText(getValue)]),
+    const root = createRenderableElement("div", {}, [
+      createRenderableElement("p", {}, [createReactiveText(getValue)]),
     ]);
 
     expect(root.node.textContent).toBe("0");
@@ -135,7 +135,7 @@ describe("render 挂载与卸载", () => {
     sibling.textContent = "兄弟节点";
     mount(container, sibling);
 
-    const view = createRenderableElement("p", [createStaticText("Hello nano-solid")]);
+    const view = createRenderableElement("p", {}, [createStaticText("Hello nano-solid")]);
     const unmount = render(view, container);
 
     expect(container.childNodes.length).toBe(2);
@@ -156,7 +156,7 @@ describe("render 挂载与卸载", () => {
     const getValue = vi.fn(() => String(count()));
 
     const reactiveText = createReactiveText(getValue);
-    const view = createRenderableElement("p", [reactiveText]);
+    const view = createRenderableElement("p", {}, [reactiveText]);
     const unmount = render(view, container);
 
     expect(container.textContent).toBe("0");
