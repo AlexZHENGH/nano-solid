@@ -28,7 +28,7 @@ export type Component<P = Record<string, never>> = (props: P) => Node;
  * @param children JSX props.children，可能是单个值、嵌套数组、响应式函数或空值。
  * @returns 可直接交给 createElement 挂载的 Node 数组。
  */
-function normalizeChildren(children: JSXChild): Node[] {
+export function normalizeChildren(children: JSXChild): Node[] {
   if (children === undefined || children === null || typeof children === "boolean") {
     return [];
   }

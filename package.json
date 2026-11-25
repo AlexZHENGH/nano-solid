@@ -8,6 +8,7 @@
   "type": "module",
   "imports": {
     "#nano-solid": "./src/index.ts",
+    "#nano-solid/compiler-runtime": "./src/compiler-runtime.ts",
     "#nano-solid/jsx-runtime": "./src/jsx-runtime.ts",
     "#nano-solid/jsx-dev-runtime": "./src/jsx-runtime.ts"
   },
