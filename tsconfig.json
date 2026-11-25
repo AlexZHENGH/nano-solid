@@ -9,9 +9,10 @@
     "target": "esnext",
     "types": ["node"],
 
-    // 启用自动 JSX 转换，通过 package.json 的 #nano-solid 子路径映射指向 src/jsx-runtime.ts。
+    // 启用自动 JSX 转换，并通过仓内自定义条件 nano-solid-source 让 TypeScript 直接解析 src/*.ts 源码。
     "jsx": "react-jsx",
-    "jsxImportSource": "#nano-solid",
+    "jsxImportSource": "nano-solid",
+    "customConditions": ["nano-solid-source"],
 
     // 让 TypeScript 检查可能不存在的值，以及可选属性的赋值。
     "strict": true,

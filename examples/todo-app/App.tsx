@@ -1,4 +1,4 @@
-import { For, Show, batch, createMemo, createSignal } from "#nano-solid";
+import { For, Show, batch, createMemo, createSignal } from "nano-solid";
 
 /** 筛选条件枚举：全部、未完成或已完成。 */
 export type TodoFilter = "all" | "active" | "completed";

@@ -171,7 +171,7 @@ describe("库产物构建与类型声明契约", () => {
 });
 
 describe("package.json 条件导出、仓内源码条件与 Todo 迁移", () => {
-  it.skip("package.json 声明 files、5 个正式 exports 子路径且每个入口满足 nano-solid-source -> types -> default 顺序", () => {
+  it("package.json 声明 files、5 个正式 exports 子路径且每个入口满足 nano-solid-source -> types -> default 顺序", () => {
     const pkg = JSON.parse(readFileSync(resolve(ROOT_DIR, "package.json"), "utf8")) as {
       files?: string[];
       imports?: Record<string, unknown>;
@@ -221,7 +221,7 @@ describe("package.json 条件导出、仓内源码条件与 Todo 迁移", () => 
     }
   });
 
-  it.skip("原生 Node 24 默认条件下通过包名自引用命中 dist/ 产物，并拦截未导出的深层内部路径", () => {
+  it("原生 Node 24 默认条件下通过包名自引用命中 dist/ 产物，并拦截未导出的深层内部路径", () => {
     buildLibrary();
 
     // 在干净的原生 Node 进程（不开启 nano-solid-source 条件）中校验全部公开子路径与越界拦截。
@@ -272,7 +272,7 @@ describe("package.json 条件导出、仓内源码条件与 Todo 迁移", () => 
     expect(report.blockedSrcCode).toBe("ERR_PACKAGE_PATH_NOT_EXPORTED");
   });
 
-  it.skip("仓内配置已启用 nano-solid-source 条件，且编译器默认注入 nano-solid/compiler-runtime", () => {
+  it("仓内配置已启用 nano-solid-source 条件，且编译器默认注入 nano-solid/compiler-runtime", () => {
     const tsconfig = parseJsonc(readFileSync(resolve(ROOT_DIR, "tsconfig.json"), "utf8")) as {
       compilerOptions?: {
         jsxImportSource?: string;
@@ -292,7 +292,7 @@ describe("package.json 条件导出、仓内源码条件与 Todo 迁移", () => 
     expect(compiled!.code).not.toContain("#nano-solid");
   });
 
-  it.skip("examples/todo-app 已全面迁移到正式包名 nano-solid，不再残留 #nano-solid", () => {
+  it("examples/todo-app 已全面迁移到正式包名 nano-solid，不再残留 #nano-solid", () => {
     const todoFiles = [
       "examples/todo-app/App.tsx",
       "examples/todo-app/main.tsx",

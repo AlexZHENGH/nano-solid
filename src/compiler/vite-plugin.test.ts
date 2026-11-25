@@ -81,7 +81,7 @@ describe("Vite 插件与 Todo 真实打包验证", () => {
           formats: ["es"],
         },
         rollupOptions: {
-          external: [/^#nano-solid/],
+          external: [/^nano-solid(\/|$)/],
         },
       },
     });
@@ -97,7 +97,7 @@ describe("Vite 插件与 Todo 真实打包验证", () => {
     if (!chunk || chunk.type !== "chunk") return;
 
     // 打包产物中已注入 compiler-runtime 并直接调用原生 DOM API。
-    expect(chunk.code).toContain("#nano-solid/compiler-runtime");
+    expect(chunk.code).toContain("nano-solid/compiler-runtime");
     expect(chunk.code).toContain('document.createElement("section")');
     expect(chunk.code).toContain('document.createElement("input")');
     expect(chunk.code).toContain('document.createElement("button")');

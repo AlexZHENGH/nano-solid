@@ -3,8 +3,8 @@ import { parse } from "@babel/parser";
 import traverse, { type Scope } from "@babel/traverse";
 import * as t from "@babel/types";
 
-/** 仓内开发阶段编译器默认注入的运行时辅助模块路径。 */
-const DEFAULT_RUNTIME_MODULE = "#nano-solid/compiler-runtime";
+/** 编译器默认注入的运行时辅助模块路径，对应 package.json 的 ./compiler-runtime 导出入口。 */
+const DEFAULT_RUNTIME_MODULE = "nano-solid/compiler-runtime";
 
 /** 编译器当前按需导入的运行时辅助函数名集合。 */
 type RuntimeHelper = "createReactiveText" | "appendChildren" | "bindProperty" | "onCleanup";
@@ -45,7 +45,7 @@ type EmitContext = {
 export type TransformOptions = {
   /** 源文件名，用于生成指向原 TSX 行号的 source map。 */
   filename?: string;
-  /** 编译期辅助函数的导入路径（仓内默认 "#nano-solid/compiler-runtime"）。 */
+  /** 编译期辅助函数的导入路径（默认 "nano-solid/compiler-runtime"）。 */
   runtimeModule?: string;
 };
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import { render } from "#nano-solid";
+import { render } from "nano-solid";
 import { App } from "./App.tsx";
 
 describe("Todo 示例应用", () => {

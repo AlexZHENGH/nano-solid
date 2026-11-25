@@ -5,13 +5,36 @@
   "keywords": [],
   "license": "MIT",
   "author": "",
+  "files": [
+    "dist"
+  ],
   "type": "module",
-  "imports": {
-    "#nano-solid": "./src/index.ts",
-    "#nano-solid/compiler-runtime": "./src/compiler-runtime.ts",
-    "#nano-solid/jsx-runtime": "./src/jsx-runtime.ts",
-    "#nano-solid/jsx-dev-runtime": "./src/jsx-runtime.ts",
-    "#nano-solid/vite": "./src/vite.ts"
+  "exports": {
+    ".": {
+      "nano-solid-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./jsx-runtime": {
+      "nano-solid-source": "./src/jsx-runtime.ts",
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "nano-solid-source": "./src/jsx-runtime.ts",
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./compiler-runtime": {
+      "nano-solid-source": "./src/compiler-runtime.ts",
+      "types": "./dist/compiler-runtime.d.ts",
+      "default": "./dist/compiler-runtime.js"
+    },
+    "./vite": {
+      "nano-solid-source": "./src/vite.ts",
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    }
   },
   "scripts": {
     "dev": "vite",
@@ -45,6 +68,14 @@
     "vite": "^7.3.8",
     "vitest": "5.1.0",
     "wrangler": "^4.168.0"
+  },
+  "peerDependencies": {
+    "vite": "^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "devEngines": {
     "packageManager": {

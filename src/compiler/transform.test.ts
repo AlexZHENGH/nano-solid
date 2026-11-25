@@ -687,7 +687,7 @@ describe("属性、事件、ref 与混合树编译", () => {
 
     // 整个文件仅注入一条 compiler-runtime 导入语句。
     const runtimeImports =
-      result!.code.match(/^import\s[\s\S]*?from\s"#nano-solid\/compiler-runtime";/gm) ?? [];
+      result!.code.match(/^import\s[\s\S]*?from\s"nano-solid\/compiler-runtime";/gm) ?? [];
     expect(runtimeImports.length).toBe(1);
 
     // 通过 AST 检查编译产物中剩余的 JSXElement，确认所有原生 HTML 标签均已直出，仅剩控制流组件 For 与 Show。

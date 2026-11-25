@@ -1,0 +1,51 @@
+按五个步骤完成包导出切换与仓内迁移：
+
+1. **在 `package.json` 声明 `files`、`exports` 与可选 `peerDependencies`，并移除旧的 `#nano-solid` `"imports"`**：
+
+```json
+{
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "nano-solid-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./jsx-runtime": {
+      "nano-solid-source": "./src/jsx-runtime.ts",
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "nano-solid-source": "./src/jsx-runtime.ts",
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./compiler-runtime": {
+      "nano-solid-source": "./src/compiler-runtime.ts",
+      "types": "./dist/compiler-runtime.d.ts",
+      "default": "./dist/compiler-runtime.js"
+    },
+    "./vite": {
+      "nano-solid-source": "./src/vite.ts",
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    }
+  },
+  "peerDependencies": {
+    "vite": "^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  }
+}
+```
+
+2. **在 `tsconfig.json` 开启 `"jsxImportSource": "nano-solid"` 与 `"customConditions": ["nano-solid-source"]`**。
+3. **在 `vite.config.ts` 导入 `defaultClientConditions` 并配置 `resolve.conditions: ["nano-solid-source", ...defaultClientConditions]`**，配置文件自身继续从 `./src/vite.ts` 导入插件以保证无 `dist/` 时也能零构建启动。
+4. **把 `src/compiler/transform.ts` 的 `DEFAULT_RUNTIME_MODULE` 改为 `"nano-solid/compiler-runtime"`**（并同步更新 `transform.test.ts` 与 `vite-plugin.test.ts` 中的模块名断言）。
+5. **将 `examples/todo-app/{App.tsx,main.tsx,App.test.tsx}` 的导入从 `"#nano-solid"` 改为 `"nano-solid"`**，去掉 `src/package-build.test.ts` 中 4 条 10.2 测试的 `.skip`。
+
+运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，不仅全部 149 条测试与双构建通过，哪怕先删除 `dist/`，直接跑 `pnpm check` 和 `pnpm build:demos` 依然会通过 `"nano-solid-source"` 命中源码并顺利完成。

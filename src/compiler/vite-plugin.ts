@@ -3,7 +3,7 @@ import { transformJSX, type TransformOptions } from "./transform.ts";
 
 /** nanoSolid Vite 插件的可选配置。 */
 export type NanoSolidPluginOptions = {
-  /** 编译期辅助函数的导入路径（仓内默认 "#nano-solid/compiler-runtime"）。 */
+  /** 编译期辅助函数的导入路径（默认 "nano-solid/compiler-runtime"）。 */
   runtimeModule?: string;
   /** 跳过编译的模块路径正则列表（例如保留 jsx-runtime.test.tsx 测试回退路径）。 */
   exclude?: RegExp[];
