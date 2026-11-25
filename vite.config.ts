@@ -18,6 +18,10 @@ export default defineConfig({
       exclude: [/src[\\/]jsx-runtime\.test\.tsx$/],
     }),
   ],
+  server: {
+    // 浏览器向页面所在的 Vite 地址发请求，由它把接口流量交给后端。
+    proxy: { "/api/todos": "http://127.0.0.1:8787" },
+  },
   build: {
     // 示例页打包输出到 dist-demos/，与 dist/ 中的可发布库产物彻底隔离。
     outDir: "dist-demos",
@@ -26,6 +30,7 @@ export default defineConfig({
         main: resolve(import.meta.dirname, "index.html"),
         todo: resolve(import.meta.dirname, "examples/todo-app/index.html"),
         todoAsync: resolve(import.meta.dirname, "examples/todo-app/async.html"),
+        todoHttp: resolve(import.meta.dirname, "examples/todo-app/http.html"),
       },
     },
   },

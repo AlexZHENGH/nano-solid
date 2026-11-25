@@ -1,0 +1,69 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "12.3 用 HTTP 仓库接入 Todo 后端"
+description: "让 Todo 通过 GET 读取任务，通过 PUT 保存整份列表，并在连接恢复后重试保存。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+上一节的内存仓库跟着浏览器页面一起消失。现在把它移到单独运行的 Node 服务里。浏览器关掉再打开，只要后端还在运行，就能读回上次确认的任务。
+
+检出本课的练习快照后，在仓库根目录开两个终端。
+
+```sh
+# 第一个终端启动 Todo 后端。
+node examples/todo-app/backend/todo-server.ts
+```
+
+```sh
+# 第二个终端启动前端。
+pnpm dev
+```
+
+在 Vite 显示的地址后加上 `/examples/todo-app/http.html`。页面已经能读取服务端的任务。勾选一项会立刻在页面上生效，但题目中的保存方法还没实现，所以会出现“保存失败”。接下来要补的是从 Store 到服务器的这一笔写入。
+
+## 两个请求，共用一份列表
+
+在第一个终端看到后端就绪后，可以在另一个终端读一次 API。
+
+```sh
+# 直接向 Node 服务读取任务，并显示 HTTP 响应头。
+curl -i http://127.0.0.1:8787/api/todos
+```
+
+| 请求             | 服务端做什么                       | 成功响应           |
+| ---------------- | ---------------------------------- | ------------------ |
+| `GET /api/todos` | 读取当前任务                       | `200` 和 JSON 列表 |
+| `PUT /api/todos` | 校验请求中的完整列表，并替换原任务 | `204`，响应体为空  |
+
+后端会校验每条任务的字段和编号。遇到坏数据或重复编号时，它拒绝整次保存。因为写入会替换整份列表，把坏项跳过后继续写就可能把那几条任务一并删掉。
+
+浏览器中，`fetch` 使用相对地址 `/api/todos`。请求先到提供页面的 Vite，再由 `vite.config.ts` 转发给 `127.0.0.1:8787`。前端代码可以只使用 API 路径，开发端口留在代理配置里。Vite 的本地构建预览也沿用这条代理规则。[Vite 7 开发代理](https://v7.vite.dev/config/server-options#server-proxy) · [Vite 7 预览代理](https://v7.vite.dev/config/preview-options#preview-proxy)
+
+## 让仓库报告保存是不是成功
+
+`main-http.tsx` 把 HTTP 仓库交给 `mountAsyncTodo`。这个入口和内存版共用异步 Store，所以界面仍然先应用编辑，由 Store 负责逐份保存和重试。
+
+在 `adapters/http-todo-repository.ts` 补齐 `save`。用 `PUT` 把这次收到的 `snapshot` 编码成 JSON，设置 `Content-Type`，并把同一个 `signal` 交给 `fetch`。页面关闭后，Store 可以通过它取消客户端的等待。请求一旦被后端接收并提交，客户端后来取消也无法撤回已经完成的写入。
+
+断线会让 `fetch` 的 Promise 拒绝。服务器如果返回 `400` 或 `500`，Promise 仍然可以拿到一个 `Response`，所以还要检查 `response.ok`，把这次写入报告为失败。只有收到成功状态，Store 才算拿到了确认。`204` 已经给出了确认，客户端不用再尝试解析 JSON。
+
+## 在浏览器里试一次断线
+
+完成练习后，让任务正常加载。按 `Ctrl+C` 停掉后端，保持浏览器页面和前端服务器开着。勾选一项，勾会留下，页面会显示“保存失败”。重新运行后端，再点“重试保存”。等到“全部已保存”后，点“重新打开应用”，刚才的勾就能读回来了。
+
+后端将任务保存在进程内存里。重启服务时它会恢复初始列表，页面上的重试会把这次尚未确认的整份列表重新提交给服务。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/12.3 12.3-learn
+> ```
+>
+> 补齐 `save` 后，HTTP 示例可以保存并重新读取最新的任务。仓库收到失败状态时，Store 会留住待重试的数据。已经取消的请求不会发出。
+>
+> ```sh
+> pnpm format && pnpm check && pnpm test:run
+> ```
+
+<LessonSolution slug="12.3-http-todo-repository" tag="12.3-solution" />

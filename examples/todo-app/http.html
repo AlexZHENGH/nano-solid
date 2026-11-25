@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>nano-solid HTTP Todo</title>
+    <link rel="stylesheet" href="/styles/tokens.css" />
+    <link rel="stylesheet" href="/styles/ui.css" />
+    <link rel="stylesheet" href="./layout.css" />
+  </head>
+  <body>
+    <main class="todo-demo">
+      <div id="app"></div>
+      <!-- 重新挂载时从 HTTP 服务重新取回已确认的列表。 -->
+      <button id="reopen-app" class="ns-btn" type="button">重新打开应用</button>
+    </main>
+    <script type="module" src="./main-http.tsx"></script>
+  </body>
+</html>

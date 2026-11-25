@@ -99,8 +99,9 @@ function classifyTodoFile(file: string): string | null {
   // 领域类型与存储协议：纯 TypeScript，不依赖框架。
   if (relPath === "types.ts") return "types";
   if (relPath === "storage.ts" || relPath === "async-repository.ts") return "storage";
-  // 具体存储实现：只实现 storage.ts 定义的协议。
+  // 存储适配器将领域数据翻译成所需的读写请求，后端复用同一套数据校验。
   if (relPath.startsWith("adapters/")) return "adapters";
+  if (relPath.startsWith("backend/")) return "backend";
   // 领域状态：用 nano-solid 管理响应式状态与自动保存。
   if (
     relPath === "todo-store.ts" ||
@@ -116,6 +117,8 @@ function classifyTodoFile(file: string): string | null {
   if (
     relPath === "main.tsx" ||
     relPath === "main-async.tsx" ||
+    relPath === "main-http.tsx" ||
+    relPath === "mount-async-todo.tsx" ||
     relPath.startsWith("test-support/")
   ) {
     return "entry";
@@ -128,6 +131,7 @@ const TODO_APP_LAYERS = {
   types: [],
   storage: ["types"],
   adapters: ["storage", "types"],
+  backend: ["storage", "types", "node:http"],
   store: ["store", "storage", "types", "nano-solid"],
   components: ["components", "types", "nano-solid"],
   app: ["app", "components", { layer: "store", typeOnly: true }, "types", "nano-solid"],
