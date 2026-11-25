@@ -98,16 +98,28 @@ function classifyTodoFile(file: string): string | null {
 
   // 领域类型与存储协议：纯 TypeScript，不依赖框架。
   if (relPath === "types.ts") return "types";
-  if (relPath === "storage.ts") return "storage";
+  if (relPath === "storage.ts" || relPath === "async-repository.ts") return "storage";
   // 具体存储实现：只实现 storage.ts 定义的协议。
   if (relPath.startsWith("adapters/")) return "adapters";
   // 领域状态：用 nano-solid 管理响应式状态与自动保存。
-  if (relPath === "todo-store.ts") return "store";
+  if (
+    relPath === "todo-store.ts" ||
+    relPath === "async-todo-store.ts" ||
+    relPath === "todo-model.ts"
+  ) {
+    return "store";
+  }
   // 视图：纯展示组件与根视图。
   if (relPath.startsWith("components/")) return "components";
-  if (relPath === "App.tsx") return "app";
+  if (relPath === "App.tsx" || relPath === "AsyncApp.tsx") return "app";
   // 组合根：应用入口与测试装配，负责把具体实现接到一起。
-  if (relPath === "main.tsx" || relPath.startsWith("test-support/")) return "entry";
+  if (
+    relPath === "main.tsx" ||
+    relPath === "main-async.tsx" ||
+    relPath.startsWith("test-support/")
+  ) {
+    return "entry";
+  }
   return null;
 }
 
@@ -116,9 +128,9 @@ const TODO_APP_LAYERS = {
   types: [],
   storage: ["types"],
   adapters: ["storage", "types"],
-  store: ["storage", "types", "nano-solid"],
+  store: ["store", "storage", "types", "nano-solid"],
   components: ["components", "types", "nano-solid"],
-  app: ["components", { layer: "store", typeOnly: true }, "types", "nano-solid"],
+  app: ["app", "components", { layer: "store", typeOnly: true }, "types", "nano-solid"],
   entry: ["entry", "app", "store", "adapters", "storage", "types", "nano-solid"],
 } satisfies Record<string, readonly LayerDependency[]>;
 

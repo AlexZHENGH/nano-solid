@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>nano-solid 异步 Todo</title>
+    <link rel="stylesheet" href="/styles/tokens.css" />
+    <link rel="stylesheet" href="/styles/ui.css" />
+    <link rel="stylesheet" href="./layout.css" />
+  </head>
+  <body>
+    <main class="todo-demo">
+      <div id="app"></div>
+      <!-- 按钮比应用活得久，可以重新挂载应用而保留同一个仓库。 -->
+      <button id="reopen-app" class="ns-btn" type="button">重新打开应用</button>
+    </main>
+    <script type="module" src="./main-async.tsx"></script>
+  </body>
+</html>

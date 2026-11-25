@@ -1,0 +1,23 @@
+/* 两个 Todo 入口共用页面布局，应用组件专注于任务列表。 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: var(--ns-bg);
+  color: var(--ns-ink);
+  font-family: var(--ns-font-sans);
+}
+
+.todo-demo {
+  width: min(100%, 34rem);
+}
+
+#reopen-app {
+  margin-top: 0.75rem;
+}

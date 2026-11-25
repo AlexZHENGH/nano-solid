@@ -25,6 +25,7 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname, "index.html"),
         todo: resolve(import.meta.dirname, "examples/todo-app/index.html"),
+        todoAsync: resolve(import.meta.dirname, "examples/todo-app/async.html"),
       },
     },
   },

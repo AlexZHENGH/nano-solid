@@ -52,6 +52,7 @@ import { frontmatter as componentsComposition } from "./lessons/11.3-components-
 import { frontmatter as todoArchitectureGuard } from "./lessons/11.4-todo-architecture-guard.mdx";
 import { frontmatter as asyncTodo } from "./lessons/12.0-async-todo.mdx";
 import { frontmatter as asyncResource } from "./lessons/12.1-async-resource.mdx";
+import { frontmatter as asyncTodoStore } from "./lessons/12.2-async-todo-store.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -108,6 +109,7 @@ const componentsCompositionUrl = `${baseUrl}/lessons/11.3-components-and-composi
 const todoArchitectureGuardUrl = `${baseUrl}/lessons/11.4-todo-architecture-guard/`;
 const asyncTodoUrl = `${baseUrl}/lessons/12.0-async-todo/`;
 const asyncResourceUrl = `${baseUrl}/lessons/12.1-async-resource/`;
+const asyncTodoStoreUrl = `${baseUrl}/lessons/12.2-async-todo-store/`;
 ---
 
 <BookLayout
@@ -229,5 +231,6 @@ const asyncResourceUrl = `${baseUrl}/lessons/12.1-async-resource/`;
   <h3 class="course-chapter"><a href={asyncTodoUrl}>{asyncTodo.title}</a></h3>
   <ul class="course-lessons">
     <li><a href={asyncResourceUrl}>{asyncResource.title}</a></li>
+    <li><a href={asyncTodoStoreUrl}>{asyncTodoStore.title}</a></li>
   </ul>
 </BookLayout>

@@ -28,7 +28,7 @@ export function PersistenceBanner(props: PersistenceBannerProps): Node {
       <Show when={props.saveError}>
         {() => (
           <p id="save-error" class="ns-banner ns-banner-danger">
-            保存失败：本地存储写入异常，本次改动仅保留在页面中，请稍后重试。
+            保存失败。本次改动仍保留在页面中，请稍后重试。
           </p>
         )}
       </Show>

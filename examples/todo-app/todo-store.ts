@@ -1,80 +1,31 @@
-import { createEffect, createMemo, createSignal, untrack } from "nano-solid";
+import { createEffect, createSignal, untrack } from "nano-solid";
 import { loadTodosFromStorage, type TodoStorage } from "./storage.ts";
-import type { Todo, TodoFilter } from "./types.ts";
+import { createTodoModel, type TodoModel } from "./todo-model.ts";
 
-/**
- * Todo 应用领域状态接口：向外暴露只读状态/派生 getter 与业务命令，隔离视图草稿、DOM 焦点与底层存储细节。
- */
-export type TodoStore = {
-  /** 当前全部任务列表。 */
-  readonly todos: () => readonly Todo[];
-  /** 按当前筛选条件过滤后的可见任务列表。 */
-  readonly visibleTodos: () => readonly Todo[];
-  /** 当前未完成任务数量。 */
-  readonly remainingCount: () => number;
-  /** 当前已完成任务数量。 */
-  readonly completedCount: () => number;
-  /** 按需（惰性）派生的已完成任务明细文案。 */
-  readonly completedDetails: () => string;
-  /** 当前筛选条件（all / active / completed）。 */
-  readonly filter: () => TodoFilter;
+/** 视图使用的任务模型，以及保存失败和启动恢复的提示。 */
+export type TodoStore = TodoModel & {
   /** 启动恢复阶段的降级提示文案，无异常时为 null。 */
   readonly loadWarning: () => string | null;
   /** 最近一次写入存储是否失败。 */
   readonly saveError: () => boolean;
-  /** 新增一条任务（自动 trim，空白文案忽略）。 */
-  addTodo(text: string): void;
-  /** 切换指定 id 任务的完成状态（不存在时忽略）。 */
-  toggleTodo(id: number): void;
-  /** 删除指定 id 的任务（不存在时忽略）。 */
-  removeTodo(id: number): void;
-  /** 更新指定 id 任务的标题（保留原 id；空白、不存在或文案未变时忽略）。 */
-  updateTodo(id: number, text: string): void;
-  /** 切换筛选条件（不会触发存储写入）。 */
-  setFilter(next: TodoFilter): void;
 };
 
 /**
- * 在当前活跃的 Owner（浏览器里由 render 管理，单测里由 createRoot 管理）内创建 Todo 业务状态与自动保存副作用。
- *
- * @param storage 同步字符串存储适配器（浏览器 localStorage 或测试内存 fake）。
- * @returns 只读状态 getter 与业务命令组成的 TodoStore。
+ * 从同步存储启动 Todo，并在当前 Owner 内登记自动保存。
+ * @param storage 浏览器本地存储或测试替身。
+ * @returns App 使用的任务模型和持久化状态。
  */
 export function createTodoStore(storage: TodoStorage): TodoStore {
-  // 1. 从 storage 恢复初始任务与降级提示，初始化 todos / filter / loadWarning / saveError 信号与单调递增的 nextId。
+  // 先恢复数据，再建立模型，避免把临时空列表写回存储。
   const initial = loadTodosFromStorage(storage);
-  const [todos, setTodos] = createSignal<Todo[]>(initial.todos);
-  const [filter, setFilter] = createSignal<TodoFilter>("all");
-  const [loadWarning] = createSignal<string | null>(initial.warning);
+  const { model } = createTodoModel(initial.todos);
+  const [loadWarning] = createSignal(initial.warning);
   const [saveError, setSaveError] = createSignal(false);
-  let nextId = Math.max(0, ...initial.todos.map((todo) => todo.id)) + 1;
 
-  // 2. 用 createMemo 派生 visibleTodos、remainingCount、completedCount 与惰性 completedDetails。
-  const visibleTodos = createMemo(() => {
-    const currentFilter = filter();
-    const list = todos();
-    if (currentFilter === "active") return list.filter((todo) => !todo.completed);
-    if (currentFilter === "completed") return list.filter((todo) => todo.completed);
-    return list;
-  });
-
-  const remainingCount = createMemo(() => todos().filter((todo) => !todo.completed).length);
-  const completedCount = createMemo(() => todos().length - remainingCount());
-
-  const completedDetails = createMemo(
-    () => {
-      const done = todos().filter((todo) => todo.completed);
-      return done.length === 0
-        ? "暂无已完成任务。"
-        : `已完成明细：${done.map((todo) => todo.text).join("、")}`;
-    },
-    { lazy: true },
-  );
-
-  // 3. 用 createEffect 仅追踪 todos() 自动持久化（跳过首轮、untrack 调用 storage.write、try/catch 维护 saveError）。
+  // 跳过刚恢复的快照。此后只追踪任务列表，筛选和提示状态不会引发写入。
   let isFirstPersistRun = true;
   createEffect(() => {
-    const currentTodos = todos();
+    const currentTodos = model.todos();
     if (isFirstPersistRun) {
       isFirstPersistRun = false;
       return;
@@ -89,51 +40,5 @@ export function createTodoStore(storage: TodoStorage): TodoStore {
     }
   });
 
-  // 4. 返回只读 getter 与 addTodo / toggleTodo / removeTodo / updateTodo / setFilter 命令。
-  const addTodo = (text: string): void => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const id = nextId;
-    nextId += 1;
-    setTodos([...todos(), { id, text: trimmed, completed: false }]);
-  };
-
-  const toggleTodo = (id: number): void => {
-    const current = todos();
-    if (!current.some((todo) => todo.id === id)) return;
-    setTodos(
-      current.map((todo) => (todo.id === id ? { ...todo, completed: !todo.completed } : todo)),
-    );
-  };
-
-  const removeTodo = (id: number): void => {
-    const current = todos();
-    if (!current.some((todo) => todo.id === id)) return;
-    setTodos(current.filter((todo) => todo.id !== id));
-  };
-
-  const updateTodo = (id: number, text: string): void => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const current = todos();
-    const target = current.find((todo) => todo.id === id);
-    if (!target || target.text === trimmed) return;
-    setTodos(current.map((todo) => (todo.id === id ? { ...todo, text: trimmed } : todo)));
-  };
-
-  return {
-    todos,
-    visibleTodos,
-    remainingCount,
-    completedCount,
-    completedDetails,
-    filter,
-    loadWarning,
-    saveError,
-    addTodo,
-    toggleTodo,
-    removeTodo,
-    updateTodo,
-    setFilter,
-  };
+  return { ...model, loadWarning, saveError };
 }
