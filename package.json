@@ -7,6 +7,7 @@
   "author": "",
   "type": "module",
   "imports": {
+    "#nano-solid": "./src/index.ts",
     "#nano-solid/jsx-runtime": "./src/jsx-runtime.ts",
     "#nano-solid/jsx-dev-runtime": "./src/jsx-runtime.ts"
   },

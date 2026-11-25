@@ -135,6 +135,14 @@
   border-radius: var(--ns-radius-md);
   background: var(--ns-surface-raised);
 }
+.ns-todo-row {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
 .ns-todo-composer {
   display: flex;
   gap: 0.5rem;

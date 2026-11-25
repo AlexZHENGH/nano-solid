@@ -1,0 +1,63 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "7.4 整理公共导出"
+description: "建立 src/index.ts 公共入口并通过 #nano-solid 路径映射实现免构建热更新，在 examples/todo-app/ 完成带筛选与行内编辑的 Todo 应用。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+到 [7.3](../7.3-forms-and-ref/) 为止，`nano-solid` 的核心原语已经全部齐备：`createSignal`、`createEffect`、`createMemo`、`createRoot`、`onCleanup`、`render`、`<Show>`、`<For>`，以及受控表单与 `ref`。
+
+这一节我们做两件标志着“从玩具代码走向真实框架”的收官动作：
+
+1. **建立框架公共 API 边界（`src/index.ts`）与免构建路径映射（`"#nano-solid"`）**，让应用代码不再直接依赖 `src/` 内部文件；
+2. **在 `examples/todo-app/` 交付完整的 Todo 示例应用**，把前七章造出来的全部能力真正串成一款可用的网页应用。
+
+## 用 `src/index.ts` 与 `"#nano-solid"` 实现免构建热更新
+
+在 [5.1](../5.1-jsx-runtime/) 里，我们已经用 Node.js 标准的 `package.json` `"imports"` 把 JSX 运行时映射到 `src/jsx-runtime.ts`。现在只需要新建 `src/index.ts` 集中导出框架公共 API，再往 `package.json` 里补一行映射：
+
+```json
+"imports": {
+  "#nano-solid": "./src/index.ts",
+  "#nano-solid/jsx-runtime": "./src/jsx-runtime.ts",
+  "#nano-solid/jsx-dev-runtime": "./src/jsx-runtime.ts"
+}
+```
+
+这一行配置同时解决了三个工程问题：
+
+- **清晰的分层边界**：`examples/todo-app/` 中的代码统一写 `import { createSignal, createMemo, For, Show, render } from "#nano-solid"`，既不用写脆弱的 `../../src/reactive.ts` 相对路径，也避免应用层私自依赖 `src/dom.ts` 里的内部辅助函数。
+- **无需先 `pnpm build`，改动源码直接热更新**：因为 `"#nano-solid"` 直接指向 `./src/index.ts` 源码，`tsc`、Vitest 和 Vite 会绕过打包产物直接解析 TypeScript 源文件。开发时边改 `src/control-flow.ts`、边在浏览器打开 `http://localhost:5173/examples/todo-app/`，Vite 的热更新立刻生效。
+- **零额外配置，平滑衔接后续发包**：不需要新建 `vite.config.ts` 手写 `resolve.alias`。等最后一章完成库构建与 `"exports"` 导出后，只需去掉前缀 `#`，把导入名从 `"#nano-solid"` 换成真实包名 `"nano-solid"` 即可。
+
+> [!NOTE]
+> **为什么现在写 `"#nano-solid"`，而不是直接写未来的包名 `"nano-solid"`？**
+>
+> 在 Node.js 与 TypeScript（`module: "nodenext"`）里，想在仓库内部直接写 `import ... from "nano-solid"` 叫做包自引用（Package Self-Reference），它的硬前提是在 `package.json` 中配置对外字段 `"exports"`。但 `"exports"` 是面向外部消费者的发布契约，应该指向编译生成的 `./dist/*.js` 与 `./dist/*.d.ts`，而不应该临时指向未编译的裸 `.ts` 源码。
+>
+> 因此我们刻意把开发期和发布期拆开：开发阶段用 Node 规范专门为仓内私有映射设计的 `"imports"`（强制以 `#` 开头，只对本仓库生效），把 `"#nano-solid"` 直接连到 `./src/index.ts` 享受免构建热更新；等最后一章真正打包发布并补齐 `"exports"` 后，再去掉 `#` 改为 `"nano-solid"`，确保独立项目验证的是真实的打包产物。
+
+同时我们在 `tsconfig.json` 的 `include` 中补上 `"examples/**/*.ts"` 和 `"examples/**/*.tsx"`，让 `pnpm check` 与 `pnpm test:run` 一并覆盖示例应用的源码和测试。
+
+## 在 `examples/todo-app/App.tsx` 中组装 Todo 应用
+
+打开 `examples/todo-app/App.tsx` 可以看到，基础状态、增删改回调以及顶部的输入框和筛选栏都已经就位，剩下两块最核心的响应式拼装交给你完成：
+
+1. **用 `createMemo` 派生三个计算值**：
+   - `visibleTodos`：按 `filter()`（`"all"` / `"active"` / `"completed"`）过滤 `todos()`；
+   - `remainingCount`：统计未完成条数；
+   - `completedCount`：用 `todos().length - remainingCount()` 链式派生已完成条数。
+2. **用 `<For>` + `<Show>` 渲染每一条任务**：
+   - 外层 `<For each={visibleTodos} getKey={(todo) => todo.id} fallback={...}>` 保证勾选完成或编辑保存时**复用同一个 `<li>`**；
+   - 每行 `<li>`（带 `class="ns-list-item"` 与形如 `todo-1` 的 `id`）内部再嵌一个 `<Show when={() => editingId() === todo().id}>`，在查看态（复选框、文本、编辑、删除）与行内编辑态（输入框、保存、取消）之间切换，并用 `<div class="ns-todo-row">` 包住各自的分支内容。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/7.4 7.4-learn
+> ```
+>
+> `src/index.ts`、`"#nano-solid"` 映射以及 `examples/todo-app/` 骨架与 5 条端到端测试已准备就绪。起手运行 `pnpm dev` 并打开 `http://localhost:5173/examples/todo-app/`，可以看到 Todo 卡片壳子与输入栏，但列表区域是空的、统计也停在 `0`。补齐 `examples/todo-app/App.tsx` 中的 `createMemo` 派生与 `<For>` / `<Show>` 列表渲染，打开页面验证新增、聚焦、勾选复用、筛选与行内编辑与 [7.0](../7.0-memo-and-for/) 完全一致，并确保 `pnpm format && pnpm check && pnpm test:run && pnpm build` 全部通过。
+
+<LessonSolution slug="7.4-todo-app" tag="7.4-solution" />

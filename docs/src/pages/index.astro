@@ -29,6 +29,7 @@ import { frontmatter as memoAndFor } from "./lessons/7.0-memo-and-for.mdx";
 import { frontmatter as memo } from "./lessons/7.1-memo.mdx";
 import { frontmatter as forList } from "./lessons/7.2-for-list.mdx";
 import { frontmatter as formsRef } from "./lessons/7.3-forms-and-ref.mdx";
+import { frontmatter as todoApp } from "./lessons/7.4-todo-app.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -62,6 +63,7 @@ const memoAndForUrl = `${baseUrl}/lessons/7.0-memo-and-for/`;
 const memoUrl = `${baseUrl}/lessons/7.1-memo/`;
 const forListUrl = `${baseUrl}/lessons/7.2-for-list/`;
 const formsRefUrl = `${baseUrl}/lessons/7.3-forms-and-ref/`;
+const todoAppUrl = `${baseUrl}/lessons/7.4-todo-app/`;
 ---
 
 <BookLayout
@@ -142,5 +144,6 @@ const formsRefUrl = `${baseUrl}/lessons/7.3-forms-and-ref/`;
     <li><a href={memoUrl}>{memo.title}</a></li>
     <li><a href={forListUrl}>{forList.title}</a></li>
     <li><a href={formsRefUrl}>{formsRef.title}</a></li>
+    <li><a href={todoAppUrl}>{todoApp.title}</a></li>
   </ul>
 </BookLayout>
