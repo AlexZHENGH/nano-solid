@@ -1,0 +1,39 @@
+先在 `src/compiler-runtime.ts` 中把 `bindProperty` 委托给 `src/dom.ts` 导出的 `applyElementProperty`，保证编译期与运行时共用同一份标签校验、光标保护和 `createEffect` 绑定逻辑：
+
+```ts
+export function bindProperty(element: HTMLElement, prop: BindablePropName, value: unknown): void {
+  applyElementProperty(element, prop, value);
+}
+```
+
+接着在 `src/compiler/transform.ts` 中完成两处核心实现：
+
+1. **在 `canCompileElement` 中放开已知非重复属性校验**：拦截展开属性 `{...props}`、未知属性、重复属性、非布尔简写以及空表达式，确保遇到未支持写法时安全退回 `jsx-runtime` 并继续编译其受支持子孙：
+
+```ts
+const seenAttrs = new Set<string>();
+for (const attr of opening.attributes) {
+  if (!t.isJSXAttribute(attr) || !t.isJSXIdentifier(attr.name)) return false;
+  const name = attr.name.name;
+  if (!SUPPORTED_ATTRS.has(name)) return false;
+  if (seenAttrs.has(name)) return false;
+  seenAttrs.add(name);
+
+  if (attr.value === null || attr.value === undefined) {
+    if (!BOOLEAN_SHORTHAND_ATTRS.has(name)) return false;
+  } else if (t.isJSXExpressionContainer(attr.value)) {
+    if (t.isJSXEmptyExpression(attr.value.expression)) return false;
+  } else if (!t.isStringLiteral(attr.value)) {
+    return false;
+  }
+}
+```
+
+2. **在 `emitAttributes` 中按源码顺序编译属性、事件与 `ref`**：
+   - `ref`：立即生成 `const _ref = expr;` 保留源码求值顺序，返回 `refId` 给 `emitElement` 在子节点全部挂载完成后调用 `if (_ref) _ref(_el);`；
+   - `onClick` / `onInput` / `onChange`：先用 `const _h = expr;` 单次求值并锁定函数引用，再用 `if (_h)` 守卫 `addEventListener` 与 `_onCleanup(() => _el.removeEventListener(...))`；
+   - 遇到 `<select value={expr}>` 时，先按属性顺序求值并保存 `expr`，把绑定语句留在 `afterChildren`，等选项挂载后再执行。
+   - 编译期可确定的静态属性（`id`、`type`、`class`、`aria-label`，以及目标标签匹配时的 `<input placeholder/value/checked>` 与 `<button disabled>`）：直接生成原生赋值或 `setAttribute`，零额外导入；
+   - 其余动态表达式或需触发标签报错的属性：统一生成 `_bindProperty(_el, name, expr)`。
+
+删除 `oxlint-disable-next-line` 注释，去掉 `src/compiler/transform.test.ts` 中 8 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run`，全部 137 条测试都会通过。

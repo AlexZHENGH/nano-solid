@@ -1,5 +1,4 @@
 import {
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   applyElementProperty,
   createReactiveText as createDomReactiveText,
   type BindablePropName,
@@ -40,9 +39,7 @@ export function appendChildren(parent: Node, child: JSXChild): void {
  * @param prop 属性名。
  * @param value 静态值、响应式 getter 或 undefined。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 export function bindProperty(element: HTMLElement, prop: BindablePropName, value: unknown): void {
   // 直接委托给 dom.ts 的 applyElementProperty，避免编译期与运行时维护两套绑定逻辑。
-  // TODO: 实现 bindProperty
-  throw new Error("TODO: 实现 compiler-runtime 的 bindProperty");
+  applyElementProperty(element, prop, value);
 }

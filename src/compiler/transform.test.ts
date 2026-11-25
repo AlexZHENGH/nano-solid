@@ -355,7 +355,7 @@ describe("动态子节点编译与按需注入 compiler-runtime", () => {
 });
 
 describe("属性、事件、ref 与混合树编译", () => {
-  it.skip("把编译期确定的静态属性直出为原生 DOM 赋值与 setAttribute，零额外运行时导入", () => {
+  it("把编译期确定的静态属性直出为原生 DOM 赋值与 setAttribute，零额外运行时导入", () => {
     const source = `
       <section id="panel" class="ns-card">
         <input type="text" class="ns-input" placeholder="输入内容" aria-label="任务名" value="初值" />
@@ -389,7 +389,7 @@ describe("属性、事件、ref 与混合树编译", () => {
     expect(button.textContent).toBe("提交");
   });
 
-  it.skip("编译后先挂载下拉选项再绑定 value，且保持属性表达式的求值顺序", () => {
+  it("编译后先挂载下拉选项再绑定 value，且保持属性表达式的求值顺序", () => {
     const [value, setValue] = createSignal("two");
     const [disabled, setDisabled] = createSignal(true);
     const calls: string[] = [];
@@ -423,7 +423,7 @@ describe("属性、事件、ref 与混合树编译", () => {
     dispose();
   });
 
-  it.skip("通过 bindProperty 驱动响应式 class、aria-label、disabled、value 与 checked，保持输入框同值光标不重置", () => {
+  it("通过 bindProperty 驱动响应式 class、aria-label、disabled、value 与 checked，保持输入框同值光标不重置", () => {
     const [active, setActive] = createSignal(false);
     const [text, setText] = createSignal("hello");
     const [checked, setChecked] = createSignal(false);
@@ -482,7 +482,7 @@ describe("属性、事件、ref 与混合树编译", () => {
     expect(input.className).toBe("ns-input active");
   });
 
-  it.skip("事件绑定先求值一次并配合 onCleanup 成对移除监听，同时安全忽略 undefined 回调", () => {
+  it("事件绑定先求值一次并配合 onCleanup 成对移除监听，同时安全忽略 undefined 回调", () => {
     const clicks: string[] = [];
     const inputs: string[] = [];
     const changes: boolean[] = [];
@@ -549,7 +549,7 @@ describe("属性、事件、ref 与混合树编译", () => {
     expect(changes).toEqual([true]);
   });
 
-  it.skip("无论 ref 写在属性列表何处，都在全部属性、事件与子节点挂载就绪后才调用", () => {
+  it("无论 ref 写在属性列表何处，都在全部属性、事件与子节点挂载就绪后才调用", () => {
     const snapshots: Array<{ id: string; className: string; childText: string | null }> = [];
     const evalOrder: string[] = [];
 
@@ -592,7 +592,7 @@ describe("属性、事件、ref 与混合树编译", () => {
     unmount();
   });
 
-  it.skip("保留非目标标签的属性校验报错，并在后续属性或子节点抛错时沿 Owner 回滚已绑定的属性与事件", () => {
+  it("保留非目标标签的属性校验报错，并在后续属性或子节点抛错时沿 Owner 回滚已绑定的属性与事件", () => {
     const { value: invalidView } = evaluateCompiledModule<() => Node>(
       `const __result = () => <div disabled={true}>bad</div>;`,
     );
@@ -647,7 +647,7 @@ describe("属性、事件、ref 与混合树编译", () => {
     expect(clicked).toBe(0);
   });
 
-  it.skip("遇到未知属性、展开属性或重复属性时安全回退给 JSX，同时继续编译混合树与控制流内部的原生标签", () => {
+  it("遇到未知属性、展开属性或重复属性时安全回退给 JSX，同时继续编译混合树与控制流内部的原生标签", () => {
     const source = `
       const view = (
         <section class="ns-card">
@@ -680,7 +680,7 @@ describe("属性、事件、ref 与混合树编译", () => {
     expect(result!.code).toContain('.id = "detail"');
   });
 
-  it.skip("能够直接编译完整的 examples/todo-app/App.tsx：所有原生 HTML 标签全部直出，仅保留 For 与 Show 组件 JSX", () => {
+  it("能够直接编译完整的 examples/todo-app/App.tsx：所有原生 HTML 标签全部直出，仅保留 For 与 Show 组件 JSX", () => {
     const todoSource = readFileSync(resolve(process.cwd(), "examples/todo-app/App.tsx"), "utf8");
     const result = transformJSX(todoSource, { filename: "examples/todo-app/App.tsx" });
     expect(result).not.toBeNull();

@@ -10,7 +10,6 @@ const DEFAULT_RUNTIME_MODULE = "#nano-solid/compiler-runtime";
 type RuntimeHelper = "createReactiveText" | "appendChildren" | "bindProperty" | "onCleanup";
 
 /** 原生元素编译器支持的 JSX 事件属性到 DOM 原生事件名的映射。 */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 const EVENT_NAME_MAP: Record<string, string> = {
   onClick: "click",
   onInput: "input",
@@ -18,7 +17,6 @@ const EVENT_NAME_MAP: Record<string, string> = {
 };
 
 /** 原生元素编译器支持的全部已知属性白名单；遇到 spread 或未列出的属性时安全回退给 jsx-runtime。 */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 const SUPPORTED_ATTRS = new Set([
   "id",
   "type",
@@ -35,7 +33,6 @@ const SUPPORTED_ATTRS = new Set([
 ]);
 
 /** 允许使用 JSX 布尔简写（如 <button disabled />）的属性集合。 */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 const BOOLEAN_SHORTHAND_ATTRS = new Set(["disabled", "checked"]);
 
 /** 递归生成 DOM 语句时共享的作用域与按需导入登记器。 */
@@ -100,7 +97,6 @@ function isReactiveTextGetter(expr: t.Expression): boolean {
  * @param value JSXAttribute 的 value 字段。
  * @returns 静态字符串内容或 null。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function unwrapStaticString(value: t.JSXAttribute["value"]): string | null {
   if (t.isStringLiteral(value)) return value.value;
   if (t.isJSXExpressionContainer(value) && t.isStringLiteral(value.expression)) {
@@ -115,7 +111,6 @@ function unwrapStaticString(value: t.JSXAttribute["value"]): string | null {
  * @param value JSXAttribute 的 value 字段。
  * @returns 静态布尔值或 null。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function unwrapStaticBoolean(value: t.JSXAttribute["value"]): boolean | null {
   if (value === null || value === undefined) return true;
   if (t.isJSXExpressionContainer(value) && t.isBooleanLiteral(value.expression)) {
@@ -130,7 +125,6 @@ function unwrapStaticBoolean(value: t.JSXAttribute["value"]): boolean | null {
  * @param value JSXAttribute 的 value 字段。
  * @returns 对应的 JS 表达式节点。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function attributeValueToExpression(value: t.JSXAttribute["value"]): t.Expression {
   if (value === null || value === undefined) {
     return t.booleanLiteral(true);
@@ -157,8 +151,22 @@ function canCompileElement(element: t.JSXElement): boolean {
   if (!/^[a-z]/.test(opening.name.name)) return false;
 
   // 校验属性列表：只接受 SUPPORTED_ATTRS 中的非重复普通 JSXAttribute（排除 spread、未知属性、非法布尔简写与空表达式）。
-  // TODO: 放开对受支持属性、事件与 ref 的编译校验
-  if (opening.attributes.length > 0) return false;
+  const seenAttrs = new Set<string>();
+  for (const attr of opening.attributes) {
+    if (!t.isJSXAttribute(attr) || !t.isJSXIdentifier(attr.name)) return false;
+    const name = attr.name.name;
+    if (!SUPPORTED_ATTRS.has(name)) return false;
+    if (seenAttrs.has(name)) return false;
+    seenAttrs.add(name);
+
+    if (attr.value === null || attr.value === undefined) {
+      if (!BOOLEAN_SHORTHAND_ATTRS.has(name)) return false;
+    } else if (t.isJSXExpressionContainer(attr.value)) {
+      if (t.isJSXEmptyExpression(attr.value.expression)) return false;
+    } else if (!t.isStringLiteral(attr.value)) {
+      return false;
+    }
+  }
 
   // 允许 JSXText、JSXExpressionContainer 以及任意 JSXElement 子节点（排除 JSXFragment 与 JSXSpreadChild）。
   return element.children.every(
@@ -178,22 +186,206 @@ function canCompileElement(element: t.JSXElement): boolean {
  * @returns 若存在 ref 属性则返回已求值的临时变量标识符，否则返回 null。
  */
 function emitAttributes(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   tagName: string,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   attributes: Array<t.JSXAttribute | t.JSXSpreadAttribute>,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   elId: t.Identifier,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   context: EmitContext,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   statements: t.Statement[],
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   afterChildren: t.Statement[],
 ): t.Identifier | null {
   // 静态属性直出 DOM 赋值/setAttribute；动态或需标签校验属性走 _bindProperty；事件先存临时变量 _h 再 addEventListener + _onCleanup；ref 先求值存 _ref 并延后调用。
-  // TODO: 实现静态属性直出、_bindProperty 动态属性、事件绑定与 ref 暂存。select 的 value 表达式先求值，绑定语句留在 afterChildren
-  return null;
+  let refId: t.Identifier | null = null;
+
+  for (const attr of attributes) {
+    if (!t.isJSXAttribute(attr) || !t.isJSXIdentifier(attr.name)) continue;
+    const name = attr.name.name;
+
+    if (name === "ref") {
+      refId = context.scope.generateUidIdentifier("ref");
+      statements.push(
+        t.variableDeclaration("const", [
+          t.variableDeclarator(refId, attributeValueToExpression(attr.value)),
+        ]),
+      );
+      continue;
+    }
+
+    const eventName = EVENT_NAME_MAP[name];
+    if (eventName) {
+      const handlerId = context.scope.generateUidIdentifier("h");
+      const onCleanupId = context.useHelper("onCleanup");
+      statements.push(
+        t.variableDeclaration("const", [
+          t.variableDeclarator(handlerId, attributeValueToExpression(attr.value)),
+        ]),
+      );
+      statements.push(
+        t.ifStatement(
+          t.cloneNode(handlerId, true),
+          t.blockStatement([
+            t.expressionStatement(
+              t.callExpression(
+                t.memberExpression(t.cloneNode(elId, true), t.identifier("addEventListener")),
+                [t.stringLiteral(eventName), t.cloneNode(handlerId, true)],
+              ),
+            ),
+            t.expressionStatement(
+              t.callExpression(onCleanupId, [
+                t.arrowFunctionExpression(
+                  [],
+                  t.callExpression(
+                    t.memberExpression(
+                      t.cloneNode(elId, true),
+                      t.identifier("removeEventListener"),
+                    ),
+                    [t.stringLiteral(eventName), t.cloneNode(handlerId, true)],
+                  ),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+      );
+      continue;
+    }
+
+    const staticString = unwrapStaticString(attr.value);
+    const staticBoolean = unwrapStaticBoolean(attr.value);
+
+    if (name === "id" && staticString !== null) {
+      statements.push(
+        t.expressionStatement(
+          t.assignmentExpression(
+            "=",
+            t.memberExpression(t.cloneNode(elId, true), t.identifier("id")),
+            t.stringLiteral(staticString),
+          ),
+        ),
+      );
+      continue;
+    }
+
+    if (name === "type" && staticString !== null) {
+      statements.push(
+        t.expressionStatement(
+          t.callExpression(
+            t.memberExpression(t.cloneNode(elId, true), t.identifier("setAttribute")),
+            [t.stringLiteral("type"), t.stringLiteral(staticString)],
+          ),
+        ),
+      );
+      continue;
+    }
+
+    if (name === "class" && staticString !== null) {
+      statements.push(
+        t.expressionStatement(
+          t.assignmentExpression(
+            "=",
+            t.memberExpression(t.cloneNode(elId, true), t.identifier("className")),
+            t.stringLiteral(staticString),
+          ),
+        ),
+      );
+      continue;
+    }
+
+    if (name === "aria-label" && staticString !== null) {
+      statements.push(
+        t.expressionStatement(
+          t.callExpression(
+            t.memberExpression(t.cloneNode(elId, true), t.identifier("setAttribute")),
+            [t.stringLiteral("aria-label"), t.stringLiteral(staticString)],
+          ),
+        ),
+      );
+      continue;
+    }
+
+    if (name === "placeholder" && tagName === "input" && staticString !== null) {
+      statements.push(
+        t.expressionStatement(
+          t.assignmentExpression(
+            "=",
+            t.memberExpression(t.cloneNode(elId, true), t.identifier("placeholder")),
+            t.stringLiteral(staticString),
+          ),
+        ),
+      );
+      continue;
+    }
+
+    if (name === "value" && tagName === "input" && staticString !== null) {
+      statements.push(
+        t.expressionStatement(
+          t.assignmentExpression(
+            "=",
+            t.memberExpression(t.cloneNode(elId, true), t.identifier("value")),
+            t.stringLiteral(staticString),
+          ),
+        ),
+      );
+      continue;
+    }
+
+    if (name === "disabled" && tagName === "button" && staticBoolean !== null) {
+      statements.push(
+        t.expressionStatement(
+          t.assignmentExpression(
+            "=",
+            t.memberExpression(t.cloneNode(elId, true), t.identifier("disabled")),
+            t.booleanLiteral(staticBoolean),
+          ),
+        ),
+      );
+      continue;
+    }
+
+    if (name === "checked" && tagName === "input" && staticBoolean !== null) {
+      statements.push(
+        t.expressionStatement(
+          t.assignmentExpression(
+            "=",
+            t.memberExpression(t.cloneNode(elId, true), t.identifier("checked")),
+            t.booleanLiteral(staticBoolean),
+          ),
+        ),
+      );
+      continue;
+    }
+
+    const bindPropertyId = context.useHelper("bindProperty");
+    if (name === "value" && tagName === "select") {
+      // 属性表达式照源码顺序求值，绑定要等 option 已挂载才能选中指定值。
+      const valueId = context.scope.generateUidIdentifier("value");
+      statements.push(
+        t.variableDeclaration("const", [
+          t.variableDeclarator(valueId, attributeValueToExpression(attr.value)),
+        ]),
+      );
+      afterChildren.push(
+        t.expressionStatement(
+          t.callExpression(bindPropertyId, [
+            t.cloneNode(elId, true),
+            t.stringLiteral(name),
+            t.cloneNode(valueId, true),
+          ]),
+        ),
+      );
+      continue;
+    }
+    statements.push(
+      t.expressionStatement(
+        t.callExpression(bindPropertyId, [
+          t.cloneNode(elId, true),
+          t.stringLiteral(name),
+          attributeValueToExpression(attr.value),
+        ]),
+      ),
+    );
+  }
+
+  return refId;
 }
 
 /**
