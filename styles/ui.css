@@ -214,3 +214,21 @@
   font-family: var(--ns-font-sans);
   font-size: 0.88rem;
 }
+.ns-banner {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-md);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+.ns-banner-warn {
+  border-color: var(--ns-warn-border);
+  background: var(--ns-warn-bg);
+  color: var(--ns-warn);
+}
+.ns-banner-danger {
+  border-color: var(--ns-danger-border);
+  background: var(--ns-danger-bg);
+  color: var(--ns-danger);
+}
