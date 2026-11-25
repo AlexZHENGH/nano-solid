@@ -25,11 +25,8 @@ export function createAsyncTodoStore(repository: AsyncTodoRepository): AsyncTodo
   // pending 是还没有确认的最新快照。activeSave 占住唯一的写入位置，卸载时也能通过它取消。
   const [pending, setPending] = createSignal<readonly Todo[] | undefined>(undefined);
   const [loadStatus, setLoadStatus] = createSignal<TodoLoadStatus>("loading");
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   const [saving, setSaving] = createSignal(false);
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   const [saveError, setSaveError] = createSignal(false);
-  // oxlint-disable-next-line no-unassigned-vars -- 完成 TODO 后删除这行
   let activeSave: AbortController | undefined;
   let disposed = false;
 
@@ -70,7 +67,34 @@ export function createAsyncTodoStore(repository: AsyncTodoRepository): AsyncTodo
     if (disposed || activeSave !== undefined || pending() === undefined) return;
 
     // 每次只提交一份快照。旧快照确认后，只有待保存快照仍是它时才算保存完成。
-    // TODO: 占住写入位置，等待仓库确认，随后处理等待期间产生的新快照。
+    const controller = new AbortController();
+    activeSave = controller;
+
+    try {
+      setSaving(true);
+      while (!controller.signal.aborted) {
+        // 保存前记住这次发出的列表。用户继续编辑时，pending 会指向新的列表。
+        const snapshot = pending();
+        if (snapshot === undefined) return;
+        setSaveError(false);
+
+        // 只接住仓库的失败，留住本地列表和 pending，让用户可以重试。
+        try {
+          await repository.save(snapshot, controller.signal);
+        } catch {
+          if (!controller.signal.aborted) setSaveError(true);
+          return;
+        }
+
+        // 卸载后的迟到确认不应再改状态。仍然是本次快照时才可以清空 pending。
+        if (controller.signal.aborted) return;
+        if (pending() === snapshot) setPending(undefined);
+      }
+    } finally {
+      // 正常结束和失败都要归还写入位置，供后续编辑或重试使用。
+      activeSave = undefined;
+      if (!controller.signal.aborted) setSaving(false);
+    }
   }
 
   // 只有初次读取完成且 Owner 还活着时，编辑命令才可以改动任务列表。

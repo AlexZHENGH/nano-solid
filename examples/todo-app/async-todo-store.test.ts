@@ -51,7 +51,7 @@ describe("异步 Todo Store", () => {
     dispose();
   });
 
-  it.skip("编辑立即显示，等待确认期间只保留最新快照，仓库始终串行写入", async () => {
+  it("编辑立即显示，等待确认期间只保留最新快照，仓库始终串行写入", async () => {
     // 先挡住第一笔保存，同时让用户继续勾选和改名。
     const first = Promise.withResolvers<void>();
     const second = Promise.withResolvers<void>();
@@ -80,7 +80,7 @@ describe("异步 Todo Store", () => {
     dispose();
   });
 
-  it.skip("保存失败后保留本地编辑，手动重试提交最新的一份列表", async () => {
+  it("保存失败后保留本地编辑，手动重试提交最新的一份列表", async () => {
     // 第一笔写入失败时，用户已经在界面做了第二次修改。
     const first = Promise.withResolvers<void>();
     const save = vi
@@ -119,7 +119,7 @@ describe("异步 Todo Store", () => {
     expect(store.todos()).toEqual([]);
   });
 
-  it.skip("卸载时取消在路上的写入，迟到的确认也不会触发下一笔", async () => {
+  it("卸载时取消在路上的写入，迟到的确认也不会触发下一笔", async () => {
     // 仓库暂不完成第一笔保存。下一次编辑已经在等它结束。
     const first = Promise.withResolvers<void>();
     const save = vi.fn<AsyncTodoRepository["save"]>().mockReturnValue(first.promise);

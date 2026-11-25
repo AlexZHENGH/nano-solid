@@ -1,0 +1,47 @@
+### 让一轮保存占住位置
+
+调用 `savePending()` 时，先看 Store 是否仍在使用、手上有没有待保存的列表、上一轮是否还在等确认。启动时把控制器放进 `activeSave`，整个循环期间保留它。用户再修改时，编辑命令仍会更新界面和 `pending`。它也会调用 `savePending()`，但这次看到已有控制器，直接返回。第一轮会在收到确认后接着处理。
+
+```ts
+async function savePending(): Promise<void> {
+  // 没有可保存的数据，或者已经有人负责保存时，当前调用可以结束。
+  if (disposed || activeSave !== undefined || pending() === undefined) return;
+  const controller = new AbortController();
+  activeSave = controller;
+
+  try {
+    setSaving(true);
+    while (!controller.signal.aborted) {
+      // 保存前把这次发出去的列表记在局部变量里。用户继续编辑会替换 pending。
+      const snapshot = pending();
+      if (snapshot === undefined) return;
+      setSaveError(false);
+
+      // 只捕获仓库的失败。失败后保留本地数据和 pending，等用户重试。
+      try {
+        await repository.save(snapshot, controller.signal);
+      } catch {
+        if (!controller.signal.aborted) setSaveError(true);
+        return;
+      }
+
+      // 即使仓库在卸载后才确认，也不能继续更新这个 Store 或发出下一笔。
+      if (controller.signal.aborted) return;
+      if (pending() === snapshot) setPending(undefined);
+    }
+  } finally {
+    // 正常完成或遇到错误都要归还写入位置。已卸载的界面无需再通知。
+    activeSave = undefined;
+    if (!controller.signal.aborted) setSaving(false);
+  }
+}
+```
+
+这里有两个时刻需要区分。发出保存时，拿到的是请求自己的 `snapshot`。确认时，再读一次 `pending()`，看看这段时间有没有新编辑。例如已经确认“发出议程”未完成，若用户此时已经勾选，这份确认只处理了发出时的快照。循环下一轮才会把已勾选的列表送出去。
+
+也可以从测试里验证顺序。第一笔 Promise 还没完成时，仓库只被调用一次，界面已经有了最新的标题和勾选。先完成第一笔，检查仓库随后收到的是两个改动都包含在内的列表。浏览器里，试试等到“全部已保存”后再重新打开，核对最后一次修改是否读回来了。
+
+```sh
+# 单跑异步 Store 的读写和卸载用例。
+pnpm exec vitest run examples/todo-app/async-todo-store.test.ts
+```
