@@ -1,0 +1,73 @@
+先在 `src/reactive.ts` 实现 `flushEffects()`，按轮次取快照清空 `pendingEffects` 并逐个执行；遇到异常时立刻清空残余队列并在 `finally` 中复原 `isFlushing`：
+
+```ts
+function flushEffects(): void {
+  // 已在刷新中则直接返回，否则置位 isFlushing 并按轮次取快照执行；抛错时清空 pendingEffects，最后在 finally 中复原 isFlushing。
+  if (isFlushing) return;
+  isFlushing = true;
+  try {
+    while (pendingEffects.size > 0) {
+      const queue = Array.from(pendingEffects);
+      pendingEffects.clear();
+      for (const effect of queue) {
+        runEffect(effect);
+      }
+    }
+  } catch (error) {
+    pendingEffects.clear();
+    throw error;
+  } finally {
+    isFlushing = false;
+  }
+}
+```
+
+接着补齐 `batch(fn)`，用 `batchDepth` 支持任意层嵌套，并在回调抛错时仍刷新已提交状态、同时优先保留最初的回调异常：
+
+```ts
+export function batch<T>(fn: () => T): T {
+  // 递增 batchDepth 执行 fn，在 finally 中递减深度并在最外层且未刷新时触发 flushEffects；若 fn 已抛错则优先保留原始回调异常。
+  batchDepth += 1;
+  let hasCallbackError = false;
+  let callbackError: unknown;
+  let result!: T;
+  try {
+    result = fn();
+  } catch (error) {
+    hasCallbackError = true;
+    callbackError = error;
+  } finally {
+    batchDepth -= 1;
+    if (batchDepth === 0 && !isFlushing) {
+      if (hasCallbackError) {
+        try {
+          flushEffects();
+        } catch {
+          // 回调已抛错时仍要刷新此前已写入的状态，若刷新本身再抛错则优先保留原始回调异常。
+        }
+      } else {
+        flushEffects();
+      }
+    }
+  }
+  if (hasCallbackError) {
+    throw callbackError;
+  }
+  return result;
+}
+```
+
+然后把 `createSignal` 里的 `set` 改为统一入队，并在非 `batch` 且非刷新状态下立刻调用 `flushEffects()`：
+
+```ts
+for (const subscriber of subscribers) {
+  if (!subscriber.disposed) {
+    pendingEffects.add(subscriber);
+  }
+}
+if (batchDepth === 0 && !isFlushing) {
+  flushEffects();
+}
+```
+
+最后在 `examples/todo-app/App.tsx` 中引入 `batch`，把 `addTodo`、`removeTodo`、`startEdit` 和 `saveEdit` 里的成组 signal 写入包进 `batch(() => { ... })`，`composerInput?.focus()` 保留在 `batch` 之后执行，再去掉 `src/reactive.test.ts` 中 5 条测试的 `.skip` 运行全量校验即可通过。

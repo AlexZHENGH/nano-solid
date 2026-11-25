@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from "#nano-solid";
+import { For, Show, batch, createMemo, createSignal } from "#nano-solid";
 
 /** 筛选条件枚举：全部、未完成或已完成。 */
 export type TodoFilter = "all" | "active" | "completed";
@@ -52,8 +52,11 @@ export function App(): Node {
     if (!text) return;
     const id = nextId;
     nextId += 1;
-    setTodos([...todos(), { id, text, completed: false }]);
-    setDraft("");
+    // 用 batch 合并新增列表与清空草稿，避免观察者看到“任务已加但草稿未清”的中间态。
+    batch(() => {
+      setTodos([...todos(), { id, text, completed: false }]);
+      setDraft("");
+    });
     composerInput?.focus();
   };
 
@@ -66,16 +69,20 @@ export function App(): Node {
 
   /** 删除指定任务；若正在编辑该任务则同步退出编辑态。 */
   const removeTodo = (id: number) => {
-    setTodos(todos().filter((todo) => todo.id !== id));
-    if (editingId() === id) {
-      setEditingId(null);
-    }
+    batch(() => {
+      setTodos(todos().filter((todo) => todo.id !== id));
+      if (editingId() === id) {
+        setEditingId(null);
+      }
+    });
   };
 
   /** 进入指定任务的行内编辑态并回填当前文案。 */
   const startEdit = (todo: Todo) => {
-    setEditDraft(todo.text);
-    setEditingId(todo.id);
+    batch(() => {
+      setEditDraft(todo.text);
+      setEditingId(todo.id);
+    });
   };
 
   /** 保存行内编辑结果并退出编辑态。 */
@@ -83,8 +90,10 @@ export function App(): Node {
     const id = editingId();
     const text = editDraft().trim();
     if (id === null || !text) return;
-    setTodos(todos().map((todo) => (todo.id === id ? { ...todo, text } : todo)));
-    setEditingId(null);
+    batch(() => {
+      setTodos(todos().map((todo) => (todo.id === id ? { ...todo, text } : todo)));
+      setEditingId(null);
+    });
   };
 
   /** 放弃行内编辑并恢复查看态。 */

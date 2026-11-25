@@ -690,7 +690,7 @@ it("createMemo 首次求值读值后抛错会清理半截订阅并原样重抛",
   expect(compute).toHaveBeenCalledTimes(1);
 });
 
-it.skip("batch 合并多次 signal 写入，只触发一次下游 effect 且批次内立刻读到新值", () => {
+it("batch 合并多次 signal 写入，只触发一次下游 effect 且批次内立刻读到新值", () => {
   const [todos, setTodos] = createSignal(["任务 1", "任务 2", "任务 3"]);
   const [draft, setDraft] = createSignal("实现 batch");
   const seen: Array<[number, string]> = [];
@@ -716,7 +716,7 @@ it.skip("batch 合并多次 signal 写入，只触发一次下游 effect 且批�
   ]);
 });
 
-it.skip("支持嵌套 batch，仅在最外层退出时统一刷新并透传返回值", () => {
+it("支持嵌套 batch，仅在最外层退出时统一刷新并透传返回值", () => {
   const [first, setFirst] = createSignal(1);
   const [second, setSecond] = createSignal(10);
   const seen: number[] = [];
@@ -741,7 +741,7 @@ it.skip("支持嵌套 batch，仅在最外层退出时统一刷新并透传返�
   expect(seen).toEqual([11, 23]);
 });
 
-it.skip("batch 回调抛错时保留已写入状态、刷新观察者并优先重抛原异常", () => {
+it("batch 回调抛错时保留已写入状态、刷新观察者并优先重抛原异常", () => {
   const [count, setCount] = createSignal(0);
   const seen: number[] = [];
   let shouldThrowInEffect = false;
@@ -786,7 +786,7 @@ it.skip("batch 回调抛错时保留已写入状态、刷新观察者并优先�
   expect(afterRecovery).toEqual([2, 3]);
 });
 
-it.skip("batch 刷新期间前序 effect 释放的排队 effect 不会被执行", () => {
+it("batch 刷新期间前序 effect 释放的排队 effect 不会被执行", () => {
   const [count, setCount] = createSignal(0);
   let secondRuns = 0;
   let disposeSecond: Dispose = () => {};
@@ -811,7 +811,7 @@ it.skip("batch 刷新期间前序 effect 释放的排队 effect 不会被执行"
   expect(secondRuns).toBe(1);
 });
 
-it.skip("batch 刷新期间某个 effect 抛错后会清空残余队列并恢复后续更新", () => {
+it("batch 刷新期间某个 effect 抛错后会清空残余队列并恢复后续更新", () => {
   const [count, setCount] = createSignal(0);
   const [other, setOther] = createSignal("a");
   const seenOther: string[] = [];
