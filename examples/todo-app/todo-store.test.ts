@@ -4,7 +4,7 @@ import { createMemoryTodoStorage } from "./test-support/memory-todo-storage.ts";
 import { createTodoStore } from "./todo-store.ts";
 
 describe("TodoStore 领域状态与生命周期", () => {
-  it.skip("支持新增、勾选、改名（保留原 id）与删除，忽略空白文案或不存在的 id，且新 id 顺延已有最大值", () => {
+  it("支持新增、勾选、改名（保留原 id）与删除，忽略空白文案或不存在的 id，且新 id 顺延已有最大值", () => {
     const storage = createMemoryTodoStorage({
       initialRaw: JSON.stringify([{ id: 10, text: "已有任务", completed: false }]),
     });
@@ -45,7 +45,7 @@ describe("TodoStore 领域状态与生命周期", () => {
     });
   });
 
-  it.skip("按筛选条件派生 visibleTodos，并与 remainingCount / completedCount / 惰性 completedDetails 保持一致", () => {
+  it("按筛选条件派生 visibleTodos，并与 remainingCount / completedCount / 惰性 completedDetails 保持一致", () => {
     const storage = createMemoryTodoStorage({
       initialRaw: JSON.stringify([
         { id: 1, text: "任务一", completed: true },
@@ -77,7 +77,7 @@ describe("TodoStore 领域状态与生命周期", () => {
     });
   });
 
-  it.skip("仅在任务实际变化时持久化：初始化、切换筛选、重复同文案改名与无效命令均不触发额外写入", () => {
+  it("仅在任务实际变化时持久化：初始化、切换筛选、重复同文案改名与无效命令均不触发额外写入", () => {
     const storage = createMemoryTodoStorage({
       initialRaw: JSON.stringify([{ id: 1, text: "任务一", completed: false }]),
     });
@@ -103,7 +103,7 @@ describe("TodoStore 领域状态与生命周期", () => {
     });
   });
 
-  it.skip("写入失败时置位 saveError 并保留内存中的最新任务，存储恢复后再次修改自动保存并清除错误", () => {
+  it("写入失败时置位 saveError 并保留内存中的最新任务，存储恢复后再次修改自动保存并清除错误", () => {
     const storage = createMemoryTodoStorage({ initialRaw: "[]", failWrite: true });
 
     createRoot((dispose) => {
@@ -122,7 +122,7 @@ describe("TodoStore 领域状态与生命周期", () => {
     });
   });
 
-  it.skip("遇到损坏数据或读取失败时保留降级警告且启动不覆写原存储", () => {
+  it("遇到损坏数据或读取失败时保留降级警告且启动不覆写原存储", () => {
     const broken = createMemoryTodoStorage({ initialRaw: "{bad-json" });
 
     createRoot((dispose) => {
@@ -135,7 +135,7 @@ describe("TodoStore 领域状态与生命周期", () => {
     });
   });
 
-  it.skip("释放所属 createRoot 后，自动保存 effect 自动退订，再调用保留下来的 store 命令也不会触发写入", () => {
+  it("释放所属 createRoot 后，自动保存 effect 自动退订，再调用保留下来的 store 命令也不会触发写入", () => {
     const storage = createMemoryTodoStorage({ initialRaw: "[]" });
 
     const { store, dispose } = createRoot((disposeRoot) => ({

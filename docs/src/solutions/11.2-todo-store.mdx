@@ -1,0 +1,52 @@
+在 `examples/todo-app/todo-store.ts` 中按四步补全 `createTodoStore(storage)`：
+
+```ts
+export function createTodoStore(storage: TodoStorage): TodoStore {
+  const initial = loadTodosFromStorage(storage);
+  const [todos, setTodos] = createSignal<Todo[]>(initial.todos);
+  const [filter, setFilter] = createSignal<TodoFilter>("all");
+  const [loadWarning] = createSignal<string | null>(initial.warning);
+  const [saveError, setSaveError] = createSignal(false);
+  let nextId = Math.max(0, ...initial.todos.map((todo) => todo.id)) + 1;
+
+  const visibleTodos = createMemo(() => {
+    const currentFilter = filter();
+    const list = todos();
+    if (currentFilter === "active") return list.filter((todo) => !todo.completed);
+    if (currentFilter === "completed") return list.filter((todo) => todo.completed);
+    return list;
+  });
+
+  const remainingCount = createMemo(() => todos().filter((todo) => !todo.completed).length);
+  const completedCount = createMemo(() => todos().length - remainingCount());
+  const completedDetails = createMemo(
+    () => {
+      const done = todos().filter((todo) => todo.completed);
+      return done.length === 0
+        ? "暂无已完成任务。"
+        : `已完成明细：${done.map((todo) => todo.text).join("、")}`;
+    },
+    { lazy: true },
+  );
+
+  let isFirstPersistRun = true;
+  createEffect(() => {
+    const currentTodos = todos();
+    if (isFirstPersistRun) {
+      isFirstPersistRun = false;
+      return;
+    }
+    try {
+      untrack(() => {
+        storage.write(JSON.stringify(currentTodos));
+      });
+      setSaveError(false);
+    } catch {
+      setSaveError(true);
+    }
+  });
+  // ...返回只读 getter 与 5 条带无操作守卫的命令。
+}
+```
+
+删掉 `oxlint-disable-next-line` 注释，去掉 `examples/todo-app/todo-store.test.ts` 中 6 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run`，全部 168 条测试（包含纯 Node 下零 DOM 的 Store 测试）都会通过。

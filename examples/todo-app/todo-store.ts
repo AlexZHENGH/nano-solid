@@ -1,6 +1,4 @@
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import { createEffect, createMemo, createSignal, untrack } from "nano-solid";
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import { loadTodosFromStorage, type TodoStorage } from "./storage.ts";
 import type { Todo, TodoFilter } from "./types.ts";
 
@@ -42,14 +40,100 @@ export type TodoStore = {
  * @param storage 同步字符串存储适配器（浏览器 localStorage 或测试内存 fake）。
  * @returns 只读状态 getter 与业务命令组成的 TodoStore。
  */
-export function createTodoStore(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  storage: TodoStorage,
-): TodoStore {
+export function createTodoStore(storage: TodoStorage): TodoStore {
   // 1. 从 storage 恢复初始任务与降级提示，初始化 todos / filter / loadWarning / saveError 信号与单调递增的 nextId。
+  const initial = loadTodosFromStorage(storage);
+  const [todos, setTodos] = createSignal<Todo[]>(initial.todos);
+  const [filter, setFilter] = createSignal<TodoFilter>("all");
+  const [loadWarning] = createSignal<string | null>(initial.warning);
+  const [saveError, setSaveError] = createSignal(false);
+  let nextId = Math.max(0, ...initial.todos.map((todo) => todo.id)) + 1;
+
   // 2. 用 createMemo 派生 visibleTodos、remainingCount、completedCount 与惰性 completedDetails。
+  const visibleTodos = createMemo(() => {
+    const currentFilter = filter();
+    const list = todos();
+    if (currentFilter === "active") return list.filter((todo) => !todo.completed);
+    if (currentFilter === "completed") return list.filter((todo) => todo.completed);
+    return list;
+  });
+
+  const remainingCount = createMemo(() => todos().filter((todo) => !todo.completed).length);
+  const completedCount = createMemo(() => todos().length - remainingCount());
+
+  const completedDetails = createMemo(
+    () => {
+      const done = todos().filter((todo) => todo.completed);
+      return done.length === 0
+        ? "暂无已完成任务。"
+        : `已完成明细：${done.map((todo) => todo.text).join("、")}`;
+    },
+    { lazy: true },
+  );
+
   // 3. 用 createEffect 仅追踪 todos() 自动持久化（跳过首轮、untrack 调用 storage.write、try/catch 维护 saveError）。
+  let isFirstPersistRun = true;
+  createEffect(() => {
+    const currentTodos = todos();
+    if (isFirstPersistRun) {
+      isFirstPersistRun = false;
+      return;
+    }
+    try {
+      untrack(() => {
+        storage.write(JSON.stringify(currentTodos));
+      });
+      setSaveError(false);
+    } catch {
+      setSaveError(true);
+    }
+  });
+
   // 4. 返回只读 getter 与 addTodo / toggleTodo / removeTodo / updateTodo / setFilter 命令。
-  // TODO: 实现 createTodoStore
-  throw new Error("TODO: 实现 createTodoStore");
+  const addTodo = (text: string): void => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const id = nextId;
+    nextId += 1;
+    setTodos([...todos(), { id, text: trimmed, completed: false }]);
+  };
+
+  const toggleTodo = (id: number): void => {
+    const current = todos();
+    if (!current.some((todo) => todo.id === id)) return;
+    setTodos(
+      current.map((todo) => (todo.id === id ? { ...todo, completed: !todo.completed } : todo)),
+    );
+  };
+
+  const removeTodo = (id: number): void => {
+    const current = todos();
+    if (!current.some((todo) => todo.id === id)) return;
+    setTodos(current.filter((todo) => todo.id !== id));
+  };
+
+  const updateTodo = (id: number, text: string): void => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const current = todos();
+    const target = current.find((todo) => todo.id === id);
+    if (!target || target.text === trimmed) return;
+    setTodos(current.map((todo) => (todo.id === id ? { ...todo, text: trimmed } : todo)));
+  };
+
+  return {
+    todos,
+    visibleTodos,
+    remainingCount,
+    completedCount,
+    completedDetails,
+    filter,
+    loadWarning,
+    saveError,
+    addTodo,
+    toggleTodo,
+    removeTodo,
+    updateTodo,
+    setFilter,
+  };
 }
