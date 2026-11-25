@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildDependencyGraph,
   checkArchitectureRules,
+  createLayerRule,
   extractModuleEdges,
   findCycles,
   listSourceFiles,
   type ArchitectureRule,
   type DependencyEdge,
+  type LayerDependency,
 } from "./dependency-graph.ts";
 
 const ROOT_DIR = process.cwd();
@@ -79,6 +81,58 @@ const REPO_ARCHITECTURE_RULES: ArchitectureRule[] = [
     },
   },
 ];
+
+/** Todo 示例应用的源码根目录（相对仓库根，带结尾斜杠）。 */
+const TODO_APP_ROOT = "examples/todo-app/";
+
+/**
+ * 把 Todo 示例应用的文件归入所属层，不属于 Todo 应用或尚未归类的文件返回 null。
+ *
+ * @param file 相对仓库根的正斜杠路径。
+ * @returns 层名或 null。
+ */
+function classifyTodoFile(file: string): string | null {
+  if (!file.startsWith(TODO_APP_ROOT)) return null;
+  const relPath = file.slice(TODO_APP_ROOT.length);
+
+  // 领域类型与存储协议：纯 TypeScript，不依赖框架。
+  if (relPath === "types.ts") return "types";
+  if (relPath === "storage.ts") return "storage";
+  // 具体存储实现：只实现 storage.ts 定义的协议。
+  if (relPath.startsWith("adapters/")) return "adapters";
+  // 领域状态：用 nano-solid 管理响应式状态与自动保存。
+  if (relPath === "todo-store.ts") return "store";
+  // 视图：纯展示组件与根视图。
+  if (relPath.startsWith("components/")) return "components";
+  if (relPath === "App.tsx") return "app";
+  // 组合根：应用入口与测试装配，负责把具体实现接到一起。
+  if (relPath === "main.tsx" || relPath.startsWith("test-support/")) return "entry";
+  return null;
+}
+
+/** Todo 示例应用的分层白名单：每一层只能依赖表中列出的层或外部包。 */
+const TODO_APP_LAYERS = {
+  types: [],
+  storage: ["types"],
+  adapters: ["storage", "types"],
+  store: ["storage", "types", "nano-solid"],
+  components: ["components", "types", "nano-solid"],
+  app: ["components", { layer: "store", typeOnly: true }, "types", "nano-solid"],
+  entry: ["entry", "app", "store", "adapters", "storage", "types", "nano-solid"],
+} satisfies Record<string, readonly LayerDependency[]>;
+
+/**
+ * 生成 Todo 示例应用的分层白名单规则。
+ *
+ * @returns 可交给 checkArchitectureRules 执行的架构规则。
+ */
+function createTodoAppLayerRule(): ArchitectureRule {
+  return createLayerRule({
+    name: "todo-app-layers",
+    classify: classifyTodoFile,
+    allow: TODO_APP_LAYERS,
+  });
+}
 
 describe("基于 Babel AST 的依赖图架构守卫", () => {
   it("精确解析静态 import、多行重导出、通配重导出、import type 与动态 import()，且不被注释和字符串误导", () => {
@@ -261,5 +315,91 @@ describe("基于 Babel AST 的依赖图架构守卫", () => {
     const graph = buildDependencyGraph(files, ROOT_DIR);
     const cycles = findCycles(graph, { includeTypeOnly: true });
     expect(cycles).toEqual([]);
+  });
+});
+
+describe("分层白名单规则", () => {
+  it.skip("只放行白名单内的依赖，拦截未授权的层、未归类的模块、未列出的外部包与越权的值导入", () => {
+    // 一张与 Todo 无关的最小分层表：ui 可依赖 domain、nano-solid，只能以类型方式依赖 infra。
+    const rule = createLayerRule({
+      name: "demo-layers",
+      classify: (file) => {
+        if (file.startsWith("app/ui/")) return "ui";
+        if (file.startsWith("app/domain/")) return "domain";
+        if (file.startsWith("app/infra/")) return "infra";
+        return null;
+      },
+      allow: {
+        ui: ["domain", { layer: "infra", typeOnly: true }, "nano-solid", "@scope/pkg"],
+        domain: [],
+        infra: ["domain"],
+      },
+    });
+
+    // 用真正的导入语句构造依赖边，同一张图同时包含允许和违规的导入。
+    const graph = new Map<string, DependencyEdge[]>([
+      [
+        "app/ui/View.tsx",
+        extractModuleEdges(
+          `
+            import { createSignal } from "nano-solid";
+            import { helper } from "@scope/pkg/sub";
+            import { createTask } from "../domain/task.ts";
+            import type { Client } from "../infra/client.ts";
+            import { createClient } from "../infra/client.ts";
+            import { run } from "../../scripts/run.ts";
+          `,
+          "app/ui/View.tsx",
+        ),
+      ],
+      [
+        "app/domain/task.ts",
+        extractModuleEdges(
+          `
+            import { View } from "../ui/View.tsx";
+            import { debounce } from "lodash";
+          `,
+          "app/domain/task.ts",
+        ),
+      ],
+      // 未归层的来源文件不受本规则约束。
+      [
+        "scripts/run.ts",
+        extractModuleEdges(`import { View } from "../app/ui/View.tsx";`, "scripts/run.ts"),
+      ],
+    ]);
+
+    // 对照所有违规位置，也确保白名单允许的导入没有被误报。
+    const violations = checkArchitectureRules(graph, [rule]);
+    expect(violations.map((v) => ({ from: v.from, line: v.line, specifier: v.specifier }))).toEqual(
+      [
+        { from: "app/domain/task.ts", line: 2, specifier: "../ui/View.tsx" },
+        { from: "app/domain/task.ts", line: 3, specifier: "lodash" },
+        { from: "app/ui/View.tsx", line: 6, specifier: "../infra/client.ts" },
+        { from: "app/ui/View.tsx", line: 7, specifier: "../../scripts/run.ts" },
+      ],
+    );
+    expect(violations.every((v) => v.rule === "demo-layers")).toBe(true);
+
+    // 违例说明要能直接指出问题：越层、只允许类型导入、目标未归层。
+    const messages = violations.map((v) => v.message);
+    expect(messages[0]).toContain("domain");
+    expect(messages[0]).toContain("ui");
+    expect(messages[2]).toContain("import type");
+    expect(messages[3]).toContain("未归入任何层");
+  });
+
+  it.skip("Todo 示例应用的每个生产文件都已归层，且真实依赖完全符合分层白名单", () => {
+    // 先确认扫描到了应用源码，避免入口目录改名后对着空图通过。
+    const files = listSourceFiles(ROOT_DIR, ["examples/todo-app"]);
+    expect(files.length).toBeGreaterThan(0);
+
+    // 新增文件必须先在 classifyTodoFile 里归层，否则会悄悄逃出规则约束。
+    expect(files.filter((file) => classifyTodoFile(file) === null)).toEqual([]);
+
+    // 用与日常测试相同的依赖图引擎检查每个已归层文件发出的导入。
+    const graph = buildDependencyGraph(files, ROOT_DIR);
+    const violations = checkArchitectureRules(graph, [createTodoAppLayerRule()]);
+    expect(violations).toEqual([]);
   });
 });

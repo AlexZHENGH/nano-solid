@@ -45,6 +45,19 @@ export type FindCyclesOptions = {
   includeTypeOnly?: boolean;
 };
 
+/** 分层白名单中的一条依赖许可：字符串表示允许任意导入该层，对象形式表示只允许纯类型导入。 */
+export type LayerDependency = string | { layer: string; typeOnly: true };
+
+/** 生成分层白名单规则所需的配置。 */
+export type LayerRuleOptions = {
+  /** 规则名称，用于违例报告定位。 */
+  name: string;
+  /** 把仓内文件路径映射到层名；返回 null 表示该文件不属于任何层。 */
+  classify: (file: string) => string | null;
+  /** 每一层允许依赖的层或外部包名；未列出的依赖一律视为违例。 */
+  allow: Readonly<Record<string, readonly LayerDependency[]>>;
+};
+
 /**
  * 递归扫描指定目录列表中的所有生产 TS / TSX 源文件（默认跳过测试文件），返回按字典序排列的正斜杠相对路径。
  *
@@ -300,4 +313,22 @@ export function checkArchitectureRules(
   return violations.sort(
     (a, b) => a.from.localeCompare(b.from) || a.line - b.line || a.rule.localeCompare(b.rule),
   );
+}
+
+/**
+ * 根据“每层允许依赖谁”的白名单表生成一条架构规则。
+ *
+ * 只有被 classify 归入某一层的来源文件受约束。依赖目标是仓内文件时用 classify 求出所在层，
+ * 是外部包时以包名（如 "nano-solid"、"@scope/pkg"）作为层名，再到来源层的白名单里查找许可。
+ *
+ * @param options 规则名称、文件归层函数与分层白名单表。
+ * @returns 可直接交给 checkArchitectureRules 执行的架构规则。
+ */
+export function createLayerRule(
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  options: LayerRuleOptions,
+): ArchitectureRule {
+  // 来源文件按 classify 归层；依赖目标按“仓内文件归层、外部包取包名”求出目标层，再按白名单与 typeOnly 许可逐条判定。
+  // TODO: 实现 createLayerRule
+  throw new Error("TODO: 实现 createLayerRule");
 }
