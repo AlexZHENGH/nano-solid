@@ -54,6 +54,7 @@ import { frontmatter as asyncTodo } from "./lessons/12.0-async-todo.mdx";
 import { frontmatter as asyncResource } from "./lessons/12.1-async-resource.mdx";
 import { frontmatter as asyncTodoStore } from "./lessons/12.2-async-todo-store.mdx";
 import { frontmatter as httpTodoRepository } from "./lessons/12.3-http-todo-repository.mdx";
+import { frontmatter as taskScheduler } from "./lessons/12.4-task-scheduler.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -112,6 +113,7 @@ const asyncTodoUrl = `${baseUrl}/lessons/12.0-async-todo/`;
 const asyncResourceUrl = `${baseUrl}/lessons/12.1-async-resource/`;
 const asyncTodoStoreUrl = `${baseUrl}/lessons/12.2-async-todo-store/`;
 const httpTodoRepositoryUrl = `${baseUrl}/lessons/12.3-http-todo-repository/`;
+const taskSchedulerUrl = `${baseUrl}/lessons/12.4-task-scheduler/`;
 ---
 
 <BookLayout
@@ -235,5 +237,6 @@ const httpTodoRepositoryUrl = `${baseUrl}/lessons/12.3-http-todo-repository/`;
     <li><a href={asyncResourceUrl}>{asyncResource.title}</a></li>
     <li><a href={asyncTodoStoreUrl}>{asyncTodoStore.title}</a></li>
     <li><a href={httpTodoRepositoryUrl}>{httpTodoRepository.title}</a></li>
+    <li><a href={taskSchedulerUrl}>{taskScheduler.title}</a></li>
   </ul>
 </BookLayout>

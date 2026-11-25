@@ -1,5 +1,6 @@
-import { Show, createSignal } from "nano-solid";
+import { Show, createSignal, type TaskScheduler } from "nano-solid";
 import { PersistenceBanner } from "./components/PersistenceBanner.tsx";
+import { ScheduledCompletedDetails } from "./components/ScheduledCompletedDetails.tsx";
 import { TodoComposer } from "./components/TodoComposer.tsx";
 import { TodoFilters } from "./components/TodoFilters.tsx";
 import { TodoList } from "./components/TodoList.tsx";
@@ -9,6 +10,8 @@ import type { TodoStore } from "./todo-store.ts";
 export type AppProps = {
   /** 由入口组合根或测试辅助函数创建的 TodoStore 实例。 */
   store: TodoStore;
+  /** 提供调度器时，展开后的明细会在以后的轮次整理。 */
+  detailsScheduler?: TaskScheduler;
 };
 
 /**
@@ -71,11 +74,23 @@ export function App(props: AppProps): Node {
         </button>
       </div>
       <Show when={showCompletedDetails}>
-        {() => (
-          <p id="completed-details" class="ns-meta">
-            {() => store.completedDetails()}
-          </p>
-        )}
+        {() => {
+          // 只在展开的分支里创建明细组件。关闭分支后，它能自行取消还没开始的工作。
+          if (props.detailsScheduler) {
+            return (
+              <ScheduledCompletedDetails
+                todos={store.todos}
+                calculate={store.completedDetails}
+                scheduler={props.detailsScheduler}
+              />
+            );
+          }
+          return (
+            <p id="completed-details" class="ns-meta">
+              {store.completedDetails}
+            </p>
+          );
+        }}
       </Show>
     </section>
   );

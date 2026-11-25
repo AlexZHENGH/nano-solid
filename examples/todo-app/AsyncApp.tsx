@@ -1,4 +1,4 @@
-import { Show } from "nano-solid";
+import { Show, createTaskScheduler } from "nano-solid";
 import { App } from "./App.tsx";
 import type { AsyncTodoStore } from "./async-todo-store.ts";
 
@@ -11,6 +11,9 @@ export type AsyncAppProps = { store: AsyncTodoStore };
  * @returns 加载中、读取失败或已加载的视图节点。
  */
 export function AsyncApp({ store }: AsyncAppProps): Node {
+  // 示例给每轮明细工作留出可观察的等待时间，任务编辑和保存仍由 Store 处理。
+  const detailsScheduler = createTaskScheduler((run) => setTimeout(run, 800));
+
   return (
     <Show
       when={() => store.loadStatus() === "ready"}
@@ -33,7 +36,7 @@ export function AsyncApp({ store }: AsyncAppProps): Node {
       {() => (
         <div>
           {/* 保存期间保留同一个 App，草稿、焦点和已显示的任务可以继续使用。 */}
-          <App store={store} />
+          <App store={store} detailsScheduler={detailsScheduler} />
           <p id="async-save-status" class="ns-meta">
             {() => {
               if (store.saving()) return "正在保存…";

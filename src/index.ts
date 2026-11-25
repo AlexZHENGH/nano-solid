@@ -15,3 +15,10 @@ export { render, type ElementProps, type TargetedEvent } from "./dom.ts";
 export { For, Show, type ForProps, type ShowProps } from "./control-flow.ts";
 export type { Component, JSXChild } from "./jsx-runtime.ts";
 export { createAsyncResource, type AsyncResource, type AsyncState } from "./async-resource.ts";
+export {
+  createTaskScheduler,
+  type TaskKey,
+  type TaskOptions,
+  type TaskPriority,
+  type TaskScheduler,
+} from "./scheduler.ts";

@@ -17,6 +17,7 @@ const ROOT_DIR = process.cwd();
 const BROWSER_RUNTIME_FILES = new Set([
   "src/reactive.ts",
   "src/async-resource.ts",
+  "src/scheduler.ts",
   "src/dom.ts",
   "src/control-flow.ts",
   "src/jsx-runtime.ts",
