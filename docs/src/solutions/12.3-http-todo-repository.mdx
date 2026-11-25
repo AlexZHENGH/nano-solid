@@ -1,0 +1,25 @@
+### 把 Store 手里的快照交给 `fetch`
+
+`save` 收到的 `snapshot` 是异步 Store 在发起这笔保存前选定的列表。把这份参数编码成 JSON 就够了。编辑时产生的新列表会由 Store 安排到下一笔请求里。
+
+```ts
+async save(snapshot, signal) {
+  // 发送这次的快照，并检查服务端是否确认写入。
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(snapshot),
+    signal,
+  });
+  if (!response.ok) throw new Error(`保存任务失败：HTTP ${response.status}`);
+},
+```
+
+服务端完成校验并替换列表后返回 `204`。此时 `save` 正常结束，Store 可以把这份快照视为已确认。服务返回错误状态时，抛出的异常会进入上一节的保存失败分支，页面上的编辑会留到重试。卸载时传入的 `signal` 可以停止当前客户端的请求，已经生效的服务端写入仍以服务端状态为准。
+
+试试去掉最后一行的 `response.ok` 检查，单跑下面的测试。后端明明返回了 `400`，`save` 的 Promise 却会正常结束，Store 就会误以为任务已经保存。试完把检查加回来。
+
+```sh
+# 只运行仓库收到服务器拒绝时的用例。
+pnpm exec vitest run examples/todo-app/http-todo.test.ts -t "服务拒绝保存时"
+```

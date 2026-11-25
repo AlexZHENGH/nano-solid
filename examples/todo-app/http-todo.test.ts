@@ -58,7 +58,7 @@ describe("HTTP Todo 仓库和后端", () => {
     expect(await (await fetch(url)).json()).toEqual(initial);
   });
 
-  it.skip("发送任务快照并等待确认，另一份仓库实例能读回这次保存", async () => {
+  it("发送任务快照并等待确认，另一份仓库实例能读回这次保存", async () => {
     // 用两个仓库实例模仿关闭页面后再次打开，确认任务存放在服务端。
     await createHttpTodoRepository(url).save(completed, new AbortController().signal);
     expect(await createHttpTodoRepository(url).load(new AbortController().signal)).toEqual(
@@ -66,7 +66,7 @@ describe("HTTP Todo 仓库和后端", () => {
     );
   });
 
-  it.skip("服务拒绝保存时，仓库把失败交还给 Store 处理", async () => {
+  it("服务拒绝保存时，仓库把失败交还给 Store 处理", async () => {
     // 编号校验由服务执行，用协议不接受的编号触发真正的 HTTP 400。
     const repository = createHttpTodoRepository(url);
     const signal = new AbortController().signal;
@@ -76,7 +76,7 @@ describe("HTTP Todo 仓库和后端", () => {
     expect(await repository.load(signal)).toEqual(initial);
   });
 
-  it.skip("把取消信号交给 fetch，已经取消的保存不会发出", async () => {
+  it("把取消信号交给 fetch，已经取消的保存不会发出", async () => {
     // 先取消再调用 save。信号漏传时请求会成功，并把已完成的快照写进去。
     const repository = createHttpTodoRepository(url);
     const signal = AbortSignal.abort();

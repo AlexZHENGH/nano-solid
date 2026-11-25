@@ -18,15 +18,15 @@ export function createHttpTodoRepository(url = "/api/todos"): AsyncTodoRepositor
       if (result.skippedCount > 0) throw new Error("后端返回的任务列表无效");
       return result.todos;
     },
-    async save(
-      // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-      snapshot,
-      // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-      signal,
-    ) {
+    async save(snapshot, signal) {
       // 发送这次的快照，并检查服务端是否确认写入。
-      // TODO: 用 PUT 发送 JSON，同时传入取消信号并检查 HTTP 状态码。
-      throw new Error("TODO: 保存任务");
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snapshot),
+        signal,
+      });
+      if (!response.ok) throw new Error(`保存任务失败：HTTP ${response.status}`);
     },
   };
 }
