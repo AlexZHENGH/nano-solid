@@ -1,0 +1,48 @@
+解答用 `active` 保存当前请求的控制器。局部变量 `request` 属于这一次 `reload()`。取消、卸载或下一次加载都会改掉 `active`，上一次调用即使还在等待，也已经失去写入资格。
+
+### 先交接控制器，再通知旧请求
+
+假设请求 A 正在运行，这时启动 B。先把 `active` 指向 B，再调用 A 的 `abort()`。如果 A 的取消监听器又发起了 C，B 接下来会发现 `active !== request`，于是直接返回。写入 `loading` 后也检查一次，因为那一步可能同步唤醒调用 `cancel()` 的订阅者。
+
+```ts
+// 先把发布资格交给本次请求。取消监听和 loading 订阅者都可能同步做出下一步操作。
+const previous = active;
+const request = new AbortController();
+active = request;
+
+try {
+  previous?.abort();
+  if (active !== request) return;
+  setState({ status: "loading" });
+  if (active !== request) return;
+
+  // 这层 try 只负责 loader，发布时的异常由 reload 的调用者处理。
+  let result: AsyncState<T>;
+  try {
+    result = { status: "success", data: await loader(request.signal) };
+  } catch (error) {
+    result = { status: "error", error };
+  }
+
+  // await 期间可能发生重试、取消和卸载。只有还在等的这次请求可以更新页面。
+  if (active === request) setState(result);
+} finally {
+  // 旧请求收尾时，新请求可能还在等待。只清掉自己的控制器。
+  if (active === request) active = undefined;
+}
+```
+
+内层 `catch` 把加载器的异常存成 `error` 状态。外层 `finally` 管的是控制器。即使通知成功结果时有订阅者抛错，`reload()` 的 Promise 也会带着这个异常结束，而控制器仍会收好，页面可以再次加载。
+
+### 取消和卸载各做什么
+
+手动取消时先取出并清掉 `active`，让旧请求失效。还在页面上的资源需要显示空闲，所以发布 `idle` 后在 `finally` 里调用旧控制器的 `abort()`。这样即使空闲状态的订阅者抛错，取消信号仍会发出。如果订阅者同步启动了新请求，`finally` 里握着的依然是旧控制器。
+
+卸载时先标记资源已释放，再清掉 `active` 并取消请求。视图已经离开，最后一份快照可以原样保留。以后调用 `reload()` 时，会在创建控制器之前直接返回。
+
+想亲眼看见旧响应覆盖新结果，可以临时去掉发布前的 `if (active === request)`，直接执行 `setState(result)`，再单跑下面这条测试。第二次请求返回后的断言依然通过。第一次请求迟到后，最后一个断言会失败，因为“订会议室”退回了未完成。试完把条件加回来。
+
+```sh
+# 只运行旧响应迟到的用例。
+pnpm exec vitest run src/async-resource.test.ts -t "较早的请求"
+```

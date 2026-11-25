@@ -23,19 +23,29 @@ export type AsyncResource<T> = {
  * @returns 读取请求状态、启动和取消加载的接口。
  */
 export function createAsyncResource<T>(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   loader: (signal: AbortSignal) => Promise<T>,
 ): AsyncResource<T> {
   // 状态和对应的数据一起发布。复用 idle 快照，连续取消时无需重复通知。
   const idle = { status: "idle" } as const;
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   const [state, setState] = createSignal<AsyncState<T>>(idle);
+
+  // 控制器同时记录取消句柄和发布资格。Owner 释放后禁止创建新的控制器。
+  let active: AbortController | undefined;
+  let disposed = false;
 
   /** 作废当前请求，让仍在使用的资源退回空闲状态。 */
   function cancel(): void {
     // 先收回旧请求的发布资格，再用它的取消句柄通知 loader 停止。
-    // TODO: 作废当前请求、发布空闲状态并通知旧请求停止。
-    throw new Error("TODO: 取消异步请求");
+    if (disposed) return;
+    const previous = active;
+    active = undefined;
+
+    // 通知订阅者可能抛错或开启新请求。无论发生什么，都只取消手中的旧请求。
+    try {
+      setState(idle);
+    } finally {
+      previous?.abort();
+    }
   }
 
   /**
@@ -44,13 +54,40 @@ export function createAsyncResource<T>(
    */
   async function reload(): Promise<void> {
     // 用独立的 AbortController 标识本次请求，区分 loader 的失败与订阅者的失败。
-    // TODO: 替换旧请求、运行 loader 并发布仍然有效的结果。
-    throw new Error("TODO: 重新加载异步资源");
+    if (disposed) return;
+    const previous = active;
+    const request = new AbortController();
+    active = request;
+
+    try {
+      // abort 监听和 loading 订阅者都可能同步取消或换掉当前请求。
+      previous?.abort();
+      if (active !== request) return;
+      setState({ status: "loading" });
+      if (active !== request) return;
+
+      // 只捕获 loader 的异常。写状态时如有订阅者抛错，应交给 reload 的调用者。
+      let result: AsyncState<T>;
+      try {
+        result = { status: "success", data: await loader(request.signal) };
+      } catch (error) {
+        result = { status: "error", error };
+      }
+
+      // await 期间可能发生重试、取消和卸载，只有当前请求还能写状态。
+      if (active === request) setState(result);
+    } finally {
+      // 旧请求收尾时，新请求可能还在等待。只清掉自己的控制器。
+      if (active === request) active = undefined;
+    }
   }
 
   // Owner 离开时作废请求和取消句柄，避免迟到的响应更新已卸载的界面。
   onCleanup(() => {
-    // TODO: 停止当前请求并禁止后续加载。
+    disposed = true;
+    const previous = active;
+    active = undefined;
+    previous?.abort();
   });
 
   return { state, reload, cancel };

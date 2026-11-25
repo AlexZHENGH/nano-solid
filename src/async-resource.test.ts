@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAsyncResource, createEffect, createRoot, type AsyncState } from "./index.ts";
 
 describe("异步资源", () => {
-  it.skip("主动加载前保持空闲，订阅者可以依次观察 loading 和 success", async () => {
+  it("主动加载前保持空闲，订阅者可以依次观察 loading 和 success", async () => {
     // 由测试决定 Promise 何时完成，这样可以先检查中间的等待状态。
     const pending = Promise.withResolvers<number>();
     const loader = vi.fn(() => pending.promise);
@@ -30,7 +30,7 @@ describe("异步资源", () => {
     dispose();
   });
 
-  it.skip("加载器同步抛错或异步拒绝时都写入 error，且可以重新加载", async () => {
+  it("加载器同步抛错或异步拒绝时都写入 error，且可以重新加载", async () => {
     // 同步抛错和 Promise 拒绝共用状态接口。第三次加载模拟错误已经排除。
     const syncError = new Error("加载器缺少配置");
     const asyncError = new Error("网络不可用");
@@ -52,7 +52,7 @@ describe("异步资源", () => {
     expect(resource.state()).toEqual({ status: "success", data: 42 });
   });
 
-  it.skip("较早的请求即使忽略取消，迟到的成功响应也不会覆盖新数据", async () => {
+  it("较早的请求即使忽略取消，迟到的成功响应也不会覆盖新数据", async () => {
     // 两次刷新分别读到勾选前后的列表。由测试决定哪一份先返回。
     type TodoSnapshot = { text: string; completed: boolean }[];
     const before: TodoSnapshot = [{ text: "订会议室", completed: false }];
@@ -80,7 +80,7 @@ describe("异步资源", () => {
     expect(resource.state()).toEqual({ status: "success", data: after });
   });
 
-  it.skip("忽略过期的失败，并在显式取消时回到 idle 且丢弃迟到的结果", async () => {
+  it("忽略过期的失败，并在显式取消时回到 idle 且丢弃迟到的结果", async () => {
     // 先结束旧请求，检查它的收尾没有清除尚在等待的新请求的取消句柄。
     const first = Promise.withResolvers<number>();
     const second = Promise.withResolvers<number>();
@@ -104,7 +104,7 @@ describe("异步资源", () => {
     expect(resource.state()).toEqual({ status: "idle" });
   });
 
-  it.skip("Owner 释放后停止当前请求，不再启动请求或变更状态", async () => {
+  it("Owner 释放后停止当前请求，不再启动请求或变更状态", async () => {
     // 在根作用域内创建资源，让 dispose 管理仍在飞行中的请求。
     const pending = Promise.withResolvers<number>();
     const loader = vi
@@ -128,7 +128,7 @@ describe("异步资源", () => {
     expect(resource.state()).toBe(beforeDispose);
   });
 
-  it.skip("订阅者在成功后抛错时保留成功快照，并让异常传给调用者", async () => {
+  it("订阅者在成功后抛错时保留成功快照，并让异常传给调用者", async () => {
     // 让 loader 成功，再模拟一个在更新界面时抛错的订阅者。
     const failure = new Error("更新视图失败");
     const { resource, dispose } = createRoot((dispose) => {
@@ -145,7 +145,7 @@ describe("异步资源", () => {
     dispose();
   });
 
-  it.skip("订阅者在 loading 通知中取消时跳过 loader", async () => {
+  it("订阅者在 loading 通知中取消时跳过 loader", async () => {
     // loading 会同步通知订阅者，订阅者可以在 loader 开始前取消。
     const loader = vi.fn(async () => 42);
     const { resource, dispose } = createRoot((dispose) => {
@@ -163,7 +163,7 @@ describe("异步资源", () => {
     dispose();
   });
 
-  it.skip("旧请求的取消监听发起新加载时，只有最后发起的请求进入 loader", async () => {
+  it("旧请求的取消监听发起新加载时，只有最后发起的请求进入 loader", async () => {
     // 取消请求会同步运行监听器。让第一次的 abort 事件立即发起第三次加载。
     const first = Promise.withResolvers<number>();
     const third = Promise.withResolvers<number>();
