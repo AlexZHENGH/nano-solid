@@ -151,7 +151,7 @@ describe("静态原生 JSX 编译器", () => {
 });
 
 describe("动态子节点编译与按需注入 compiler-runtime", () => {
-  it.skip("把函数字面量子节点编译为 createReactiveText，并保持普通表达式 {count()} 只求值一次的静态快照语义", () => {
+  it("把函数字面量子节点编译为 createReactiveText，并保持普通表达式 {count()} 只求值一次的静态快照语义", () => {
     const [count, setCount] = createSignal(1);
     const { code, value: view } = evaluateCompiledModule<() => Node>(
       `
@@ -187,7 +187,7 @@ describe("动态子节点编译与按需注入 compiler-runtime", () => {
     expect(reactiveTextNode?.textContent).toBe("2");
   });
 
-  it.skip("通过 appendChildren 保持数字 0、布尔/空值、嵌套数组、原生 Node、DocumentFragment 与函数变量的运行时等价性", () => {
+  it("通过 appendChildren 保持数字 0、布尔/空值、嵌套数组、原生 Node、DocumentFragment 与函数变量的运行时等价性", () => {
     const [label, setLabel] = createSignal("初始");
     const badge = document.createElement("em");
     badge.textContent = "节点";
@@ -225,7 +225,7 @@ describe("动态子节点编译与按需注入 compiler-runtime", () => {
     unmount();
   });
 
-  it.skip("纯静态 JSX 不注入任何 import；多处动态表达式只合并注入一条 import 并支持自定义 runtimeModule", () => {
+  it("纯静态 JSX 不注入任何 import；多处动态表达式只合并注入一条 import 并支持自定义 runtimeModule", () => {
     const staticResult = transformJSX("const el = <div><span>纯静态</span></div>;");
     expect(staticResult).not.toBeNull();
     expect(staticResult!.code).not.toContain("import ");
@@ -247,7 +247,7 @@ describe("动态子节点编译与按需注入 compiler-runtime", () => {
     expect(dynamicResult!.code).toContain("createReactiveText as ");
   });
 
-  it.skip("当用户代码在模块顶层或嵌套函数内声明了同名标识符时，生成的辅助导入别名与局部变量均不发生冲突", () => {
+  it("当用户代码在模块顶层或嵌套函数内声明了同名标识符时，生成的辅助导入别名与局部变量均不发生冲突", () => {
     const [count, setCount] = createSignal(5);
     const { value: view } = evaluateCompiledModule<() => Node>(
       `
@@ -283,7 +283,7 @@ describe("动态子节点编译与按需注入 compiler-runtime", () => {
     unmount();
   });
 
-  it.skip("已编译的原生容器内嵌组件或未支持子元素时，通过 appendChildren 委托外层同时继续编译其内部受支持的原生子树", () => {
+  it("已编译的原生容器内嵌组件或未支持子元素时，通过 appendChildren 委托外层同时继续编译其内部受支持的原生子树", () => {
     const source = `
       const view = (
         <section>
@@ -312,7 +312,7 @@ describe("动态子节点编译与按需注入 compiler-runtime", () => {
     expect(result!.code).toContain('document.createTextNode("外层交运行时内层仍编译")');
   });
 
-  it.skip("动态子节点在构造中途抛错时，沿当前 Owner 回滚已建立的响应式文本订阅", () => {
+  it("动态子节点在构造中途抛错时，沿当前 Owner 回滚已建立的响应式文本订阅", () => {
     const [count, setCount] = createSignal(0);
     let runs = 0;
 

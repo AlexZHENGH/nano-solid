@@ -55,11 +55,14 @@ export function normalizeJSXText(raw: string): string {
  * @param expr JSXExpressionContainer 中的表达式 AST 节点。
  * @returns 是否可直接交由 createReactiveText 处理。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function isReactiveTextGetter(expr: t.Expression): boolean {
   // 仅匹配无参、非 async、非 generator 的箭头函数或函数表达式，不改变 {count()} 等普通表达式的单次求值语义。
-  // TODO: 实现 isReactiveTextGetter
-  return false;
+  return (
+    (t.isArrowFunctionExpression(expr) || t.isFunctionExpression(expr)) &&
+    !expr.async &&
+    !expr.generator &&
+    expr.params.length === 0
+  );
 }
 
 /**
@@ -76,15 +79,9 @@ function canCompileElement(element: t.JSXElement): boolean {
   if (opening.attributes.length > 0) return false;
 
   // 允许 JSXText、JSXExpressionContainer 以及任意 JSXElement 子节点（排除 JSXFragment 与 JSXSpreadChild）。
-  // TODO: 放宽子元素与表达式容器校验，支持任意 JSXElement 与 JSXExpressionContainer 子节点
-  return element.children.every((child) => {
-    if (t.isJSXText(child)) return true;
-    if (t.isJSXElement(child)) return canCompileElement(child);
-    if (t.isJSXExpressionContainer(child)) {
-      return t.isJSXEmptyExpression(child.expression) || t.isStringLiteral(child.expression);
-    }
-    return false;
-  });
+  return element.children.every(
+    (child) => t.isJSXText(child) || t.isJSXElement(child) || t.isJSXExpressionContainer(child),
+  );
 }
 
 /**
@@ -154,22 +151,47 @@ function emitElement(
       }
 
       // 函数字面量子节点直接编为 _createReactiveText(expr)，其他动态表达式交给 _appendChildren(_el, expr) 保持运行时语义等价。
-      // TODO: 编译函数字面量表达式与通用动态表达式子节点
+      if (isReactiveTextGetter(child.expression)) {
+        const reactiveTextId = context.useHelper("createReactiveText");
+        statements.push(
+          t.expressionStatement(
+            t.callExpression(
+              t.memberExpression(t.cloneNode(elId, true), t.identifier("appendChild")),
+              [t.callExpression(reactiveTextId, [child.expression])],
+            ),
+          ),
+        );
+      } else {
+        const appendChildrenId = context.useHelper("appendChildren");
+        statements.push(
+          t.expressionStatement(
+            t.callExpression(appendChildrenId, [t.cloneNode(elId, true), child.expression]),
+          ),
+        );
+      }
       continue;
     }
 
     if (t.isJSXElement(child)) {
       // 可编译的子原生标签继续展平进当前语句列表；组件或暂不支持的原生标签交给 _appendChildren(_el, child)，留给外层 traverse 继续深入其内部。
-      // TODO: 分流处理不可直接编译的子 JSXElement
-      const childId = emitElement(child, context, statements);
-      statements.push(
-        t.expressionStatement(
-          t.callExpression(
-            t.memberExpression(t.cloneNode(elId, true), t.identifier("appendChild")),
-            [t.cloneNode(childId, true)],
+      if (canCompileElement(child)) {
+        const childId = emitElement(child, context, statements);
+        statements.push(
+          t.expressionStatement(
+            t.callExpression(
+              t.memberExpression(t.cloneNode(elId, true), t.identifier("appendChild")),
+              [t.cloneNode(childId, true)],
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        const appendChildrenId = context.useHelper("appendChildren");
+        statements.push(
+          t.expressionStatement(
+            t.callExpression(appendChildrenId, [t.cloneNode(elId, true), child]),
+          ),
+        );
+      }
     }
   }
 
@@ -190,7 +212,6 @@ export function transformJSX(source: string, options?: TransformOptions): Transf
     plugins: ["jsx", "typescript"],
   });
 
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   const runtimeModule = options?.runtimeModule ?? DEFAULT_RUNTIME_MODULE;
   // 记录整份文件实际用到的运行时辅助函数及其在 Program 作用域下防冲突的局部别名。
   const helperImports = new Map<RuntimeHelper, t.Identifier>();
@@ -233,14 +254,19 @@ export function transformJSX(source: string, options?: TransformOptions): Transf
 
       changed = true;
       // 去掉 path.skip() 让 Babel 继续遍历替换后的 IIFE，从而编译挂在 _appendChildren 中的组件/未支持元素内部的子树。
-      // TODO: 移除 path.skip() 以支持混合子树内的嵌套编译
-      path.skip();
     },
     Program: {
-      // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
       exit(programPath) {
         // 仅当实际用到了辅助函数时，按字母序合并生成一条 import { ... } from runtimeModule 插入模块顶部。
-        // TODO: 在 Program.exit 按需单次注入辅助函数导入语句
+        if (helperImports.size === 0) return;
+
+        const specifiers = Array.from(helperImports.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([importedName, localId]) =>
+            t.importSpecifier(t.cloneNode(localId, true), t.identifier(importedName)),
+          );
+        const importDecl = t.importDeclaration(specifiers, t.stringLiteral(runtimeModule));
+        programPath.unshiftContainer("body", importDecl);
       },
     },
   });

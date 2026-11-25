@@ -1,0 +1,83 @@
+先在 `src/compiler-runtime.ts` 中实现两个轻量运行时辅助函数：分别委托给 `dom.ts` 的 `createReactiveText`（统一做 `String(...)` 转换以兼容数字和字符串返回值）和 `jsx-runtime.ts` 导出的 `normalizeChildren`：
+
+```ts
+export function createReactiveText(getValue: () => string | number): Text {
+  return createDomReactiveText(() => String(getValue()));
+}
+
+export function appendChildren(parent: Node, child: JSXChild): void {
+  for (const node of normalizeChildren(child)) {
+    parent.appendChild(node);
+  }
+}
+```
+
+接着在 `src/compiler/transform.ts` 中补全四个关键改动：
+
+1. **判定无参同步函数字面量并放宽 `canCompileElement`**：`isReactiveTextGetter` 只匹配无参、非 `async`、非 `generator` 的箭头函数或函数表达式；`canCompileElement` 允许任意 `JSXText`、`JSXElement` 与 `JSXExpressionContainer` 子节点：
+
+```ts
+function isReactiveTextGetter(expr: t.Expression): boolean {
+  return (
+    (t.isArrowFunctionExpression(expr) || t.isFunctionExpression(expr)) &&
+    !expr.async &&
+    !expr.generator &&
+    expr.params.length === 0
+  );
+}
+
+function canCompileElement(element: t.JSXElement): boolean {
+  const opening = element.openingElement;
+  if (!t.isJSXIdentifier(opening.name)) return false;
+  if (!/^[a-z]/.test(opening.name.name)) return false;
+  if (opening.attributes.length > 0) return false;
+
+  return element.children.every(
+    (child) => t.isJSXText(child) || t.isJSXElement(child) || t.isJSXExpressionContainer(child),
+  );
+}
+```
+
+2. **在 `emitElement` 中分流编译动态表达式与未支持子元素**：函数字面量直接走 `_createReactiveText(expr)`，其余表达式与不可直接编译的子 `JSXElement` 交给 `_appendChildren(_el, ...)`：
+
+```ts
+if (isReactiveTextGetter(child.expression)) {
+  const reactiveTextId = context.useHelper("createReactiveText");
+  statements.push(
+    t.expressionStatement(
+      t.callExpression(t.memberExpression(t.cloneNode(elId, true), t.identifier("appendChild")), [
+        t.callExpression(reactiveTextId, [child.expression]),
+      ]),
+    ),
+  );
+} else {
+  const appendChildrenId = context.useHelper("appendChildren");
+  statements.push(
+    t.expressionStatement(
+      t.callExpression(appendChildrenId, [t.cloneNode(elId, true), child.expression]),
+    ),
+  );
+}
+```
+
+3. **去掉 `JSXElement` 访问器末尾的 `path.skip()`**：这样替换成 IIFE 之后，Babel 还会继续走进 `_appendChildren(_el, <Card>...</Card>)` 的参数子树，把组件或暂未支持元素内部的受支持原生标签全部编完。
+
+4. **在 `Program.exit` 按需单次注入排序后的 `import` 声明**：
+
+```ts
+Program: {
+  exit(programPath) {
+    if (helperImports.size === 0) return;
+
+    const specifiers = Array.from(helperImports.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([importedName, localId]) =>
+        t.importSpecifier(t.cloneNode(localId, true), t.identifier(importedName)),
+      );
+    const importDecl = t.importDeclaration(specifiers, t.stringLiteral(runtimeModule));
+    programPath.unshiftContainer("body", importDecl);
+  },
+},
+```
+
+删掉 `oxlint-disable-next-line` 注释并去掉 `src/compiler/transform.test.ts` 中 6 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run`，全部 129 条测试都会通过。
