@@ -29,6 +29,26 @@ let currentEffect: Effect | undefined;
 /** 记录当前活跃的所有权作用域，新创建的子 effect 与清理回调会自动归属于它。 */
 let currentOwner: Owner | undefined;
 
+/** 当前嵌套的 batch 深度；大于 0 时把受影响的 effect 暂存进队列，等最外层退出再统一刷新。 */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+let batchDepth = 0;
+
+/** 标记当前是否正在执行 flushEffects，避免刷新途中触发嵌套刷新。 */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+let isFlushing = false;
+
+/** 等待本轮统一执行的去重 effect 队列。 */
+const pendingEffects = new Set<Effect>();
+
+/**
+ * 同步清空 pendingEffects 队列：循环取出快照逐个执行，确保刷新途中新入队的 effect 也能在同一轮收尾；若中途抛错则清空残余队列并恢复 isFlushing 状态。
+ */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+function flushEffects(): void {
+  // 已在刷新中则直接返回，否则置位 isFlushing 并按轮次取快照执行；抛错时清空 pendingEffects，最后在 finally 中复原 isFlushing。
+  // TODO: 实现 flushEffects 的队列循环刷新与异常恢复逻辑。
+}
+
 /**
  * 把 effect 从它上一轮订阅过的所有 signal 中移除，并清空自身依赖记录。
  *
@@ -214,7 +234,10 @@ export function createEffect(callback: EffectCallback): Dispose {
     callback,
     dependencies: new Set(),
   };
-  effect.onDispose = () => cleanupDependencies(effect);
+  effect.onDispose = () => {
+    cleanupDependencies(effect);
+    pendingEffects.delete(effect);
+  };
 
   // 若存在未释放的父作用域，把当前 effect 挂入其 children，便于父作用域重跑或销毁时统一回收。
   if (currentOwner && !currentOwner.disposed) {
@@ -248,6 +271,18 @@ export function createMemo<T>(compute: () => T): () => T {
   });
 
   return () => get();
+}
+
+/**
+ * 在同步作用域内合并多次 signal 写入：批次内每次写入立即生效且可直接读到最新值，所有受影响的 effect 推迟到最外层 batch 结束时去重统一执行。
+ *
+ * @param fn 包含一组状态写入的同步回调函数。
+ * @returns fn 的返回值。
+ */
+export function batch<T>(fn: () => T): T {
+  // 递增 batchDepth 执行 fn，在 finally 中递减深度并在最外层且未刷新时触发 flushEffects；若 fn 已抛错则优先保留原始回调异常。
+  // TODO: 用 batchDepth 与 flushEffects 实现支持嵌套和异常恢复的批量更新。
+  return fn();
 }
 
 /**
@@ -288,7 +323,8 @@ export function createSignal<T>(initialValue: T) {
     if (Object.is(value, next)) return;
     // 先更新值，effect 重跑时调用 get() 才能读到这次写入的结果。
     value = next;
-    // 复制本轮订阅者快照：runEffect 会先删掉旧订阅再重新登记，直接遍历原 Set 会陷入死循环。
+    // 把当前订阅者登记进 pendingEffects 去重队列；若当前不在 batch 且未处于刷新中，立刻同步调用 flushEffects。
+    // TODO: 改为把订阅者加入 pendingEffects，并在 batchDepth === 0 && !isFlushing 时调用 flushEffects()。
     for (const subscriber of Array.from(subscribers)) {
       runEffect(subscriber);
     }

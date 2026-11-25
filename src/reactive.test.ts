@@ -1,5 +1,6 @@
 import { expect, it, vi } from "vitest";
 import {
+  batch,
   createEffect,
   createMemo,
   createRoot,
@@ -687,6 +688,156 @@ it("createMemo 首次求值读值后抛错会清理半截订阅并原样重抛",
 
   setCount(1);
   expect(compute).toHaveBeenCalledTimes(1);
+});
+
+it.skip("batch 合并多次 signal 写入，只触发一次下游 effect 且批次内立刻读到新值", () => {
+  const [todos, setTodos] = createSignal(["任务 1", "任务 2", "任务 3"]);
+  const [draft, setDraft] = createSignal("实现 batch");
+  const seen: Array<[number, string]> = [];
+  let insideBatchSnapshot: [number, string] | undefined;
+
+  createEffect(() => {
+    seen.push([todos().length, draft()]);
+  });
+
+  expect(seen).toEqual([[3, "实现 batch"]]);
+
+  // 模拟 Todo 的 addTodo：同一操作连续更新列表和草稿，但观察者只应收到最终一致状态。
+  batch(() => {
+    setTodos([...todos(), draft()]);
+    setDraft("");
+    insideBatchSnapshot = [todos().length, draft()];
+  });
+
+  expect(insideBatchSnapshot).toEqual([4, ""]);
+  expect(seen).toEqual([
+    [3, "实现 batch"],
+    [4, ""],
+  ]);
+});
+
+it.skip("支持嵌套 batch，仅在最外层退出时统一刷新并透传返回值", () => {
+  const [first, setFirst] = createSignal(1);
+  const [second, setSecond] = createSignal(10);
+  const seen: number[] = [];
+
+  createEffect(() => {
+    seen.push(first() + second());
+  });
+
+  const returned = batch(() => {
+    setFirst(2);
+    const innerResult = batch(() => {
+      setSecond(20);
+      return "inner-ok";
+    });
+    // 内层 batch 退出时外层尚未结束，effect 仍未刷新。
+    expect(seen).toEqual([11]);
+    setFirst(3);
+    return `${innerResult}:outer-ok`;
+  });
+
+  expect(returned).toBe("inner-ok:outer-ok");
+  expect(seen).toEqual([11, 23]);
+});
+
+it.skip("batch 回调抛错时保留已写入状态、刷新观察者并优先重抛原异常", () => {
+  const [count, setCount] = createSignal(0);
+  const seen: number[] = [];
+  let shouldThrowInEffect = false;
+
+  createEffect(() => {
+    const current = count();
+    seen.push(current);
+    if (shouldThrowInEffect && current === 2) {
+      throw new Error("flush boom");
+    }
+  });
+
+  // 场景 1：回调写入后抛错，退出 batch 时仍刷新已提交状态并恢复后续写入能力。
+  expect(() => {
+    batch(() => {
+      setCount(1);
+      throw new Error("batch boom");
+    });
+  }).toThrow("batch boom");
+
+  expect(count()).toBe(1);
+  expect(seen).toEqual([0, 1]);
+
+  // 场景 2：回调抛错且退出刷新时 effect 也抛错，优先保留原始回调异常。
+  shouldThrowInEffect = true;
+  expect(() => {
+    batch(() => {
+      setCount(2);
+      throw new Error("primary callback error");
+    });
+  }).toThrow("primary callback error");
+
+  expect(count()).toBe(2);
+  expect(seen).toEqual([0, 1, 2]);
+
+  // 队列与 batchDepth 已恢复，后续新注册的 effect 仍可正常响应写入。
+  const afterRecovery: number[] = [];
+  createEffect(() => {
+    afterRecovery.push(count());
+  });
+  setCount(3);
+  expect(afterRecovery).toEqual([2, 3]);
+});
+
+it.skip("batch 刷新期间前序 effect 释放的排队 effect 不会被执行", () => {
+  const [count, setCount] = createSignal(0);
+  let secondRuns = 0;
+  let disposeSecond: Dispose = () => {};
+
+  createEffect(() => {
+    if (count() === 1) {
+      disposeSecond();
+    }
+  });
+
+  disposeSecond = createEffect(() => {
+    count();
+    secondRuns += 1;
+  });
+
+  expect(secondRuns).toBe(1);
+
+  batch(() => {
+    setCount(1);
+  });
+
+  expect(secondRuns).toBe(1);
+});
+
+it.skip("batch 刷新期间某个 effect 抛错后会清空残余队列并恢复后续更新", () => {
+  const [count, setCount] = createSignal(0);
+  const [other, setOther] = createSignal("a");
+  const seenOther: string[] = [];
+
+  createEffect(() => {
+    if (count() === 1) {
+      setOther("stale");
+      throw new Error("effect failed in flush");
+    }
+  });
+
+  createEffect(() => {
+    seenOther.push(other());
+  });
+
+  expect(seenOther).toEqual(["a"]);
+
+  expect(() => {
+    batch(() => {
+      setCount(1);
+    });
+  }).toThrow("effect failed in flush");
+
+  // 异常后的下一轮写入必须照常触发刷新，不能被卡在 isFlushing === true。
+  setOther("b");
+  expect(seenOther).toEqual(["a", "b"]);
 });
 
 it("清理回调抛错时仍释放兄弟 effect 和父作用域", () => {
