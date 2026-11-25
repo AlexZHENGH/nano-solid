@@ -5,7 +5,7 @@ import { render } from "#nano-solid";
 import { App } from "./App.tsx";
 
 describe("Todo 示例应用", () => {
-  it.skip("渲染初始待办列表与统计，添加新任务后清空输入框并重新聚焦", () => {
+  it("渲染初始待办列表与统计，添加新任务后清空输入框并重新聚焦", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const unmount = render(() => <App />, container);
@@ -37,7 +37,7 @@ describe("Todo 示例应用", () => {
     }
   });
 
-  it.skip("勾选任务完成时复用同一个 li 节点并同步更新剩余未完成统计", () => {
+  it("勾选任务完成时复用同一个 li 节点并同步更新剩余未完成统计", () => {
     const container = document.createElement("div");
     const unmount = render(() => <App />, container);
 
@@ -56,7 +56,7 @@ describe("Todo 示例应用", () => {
     unmount();
   });
 
-  it.skip("在全部、未完成、已完成筛选之间切换时通过 createMemo 同步列表", () => {
+  it("在全部、未完成、已完成筛选之间切换时通过 createMemo 同步列表", () => {
     const container = document.createElement("div");
     const unmount = render(() => <App />, container);
 
@@ -80,7 +80,7 @@ describe("Todo 示例应用", () => {
     unmount();
   });
 
-  it.skip("支持通过行内编辑保存或取消修改，以及删除任务后展示空列表 fallback", () => {
+  it("支持通过行内编辑保存或取消修改，以及删除任务后展示空列表 fallback", () => {
     const container = document.createElement("div");
     const unmount = render(() => <App />, container);
 
@@ -128,7 +128,7 @@ describe("Todo 示例应用", () => {
     unmount();
   });
 
-  it.skip("卸载 Todo 应用后清空容器", () => {
+  it("卸载 Todo 应用后清空容器", () => {
     const container = document.createElement("div");
     const unmount = render(() => <App />, container);
 

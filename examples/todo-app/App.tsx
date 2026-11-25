@@ -1,12 +1,4 @@
-import {
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  For,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  Show,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  createMemo,
-  createSignal,
-} from "#nano-solid";
+import { For, Show, createMemo, createSignal } from "#nano-solid";
 
 /** 筛选条件枚举：全部、未完成或已完成。 */
 export type TodoFilter = "all" | "active" | "completed";
@@ -42,10 +34,17 @@ export function App(): Node {
   let composerInput: HTMLInputElement | undefined;
 
   // 2. 用 createMemo 派生筛选后的可见列表与未完成、已完成数量，避免多处读取重复遍历。
-  // TODO: 用 createMemo 按 filter() ("all" / "active" / "completed") 过滤 todos()，并用 createMemo 统计 remainingCount 与 completedCount。
-  const visibleTodos = () => todos();
-  const remainingCount = () => 0;
-  const completedCount = () => 0;
+  const visibleTodos = createMemo(() => {
+    const currentFilter = filter();
+    const list = todos();
+    if (currentFilter === "active") return list.filter((todo) => !todo.completed);
+    if (currentFilter === "completed") return list.filter((todo) => todo.completed);
+    return list;
+  });
+
+  // 未完成条数经 Object.is 同值截断：仅修改文案时不唤醒状态徽章；已完成条数进一步链式派生。
+  const remainingCount = createMemo(() => todos().filter((todo) => !todo.completed).length);
+  const completedCount = createMemo(() => todos().length - remainingCount());
 
   /** 添加一条新任务，清空草稿并把焦点放回新建输入框。 */
   const addTodo = () => {
@@ -59,7 +58,6 @@ export function App(): Node {
   };
 
   /** 切换指定任务的完成状态（不可变更新，保留原 id 以便 <For> 原地复用行节点）。 */
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   const toggleTodo = (id: number) => {
     setTodos(
       todos().map((todo) => (todo.id === id ? { ...todo, completed: !todo.completed } : todo)),
@@ -67,7 +65,6 @@ export function App(): Node {
   };
 
   /** 删除指定任务；若正在编辑该任务则同步退出编辑态。 */
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   const removeTodo = (id: number) => {
     setTodos(todos().filter((todo) => todo.id !== id));
     if (editingId() === id) {
@@ -76,14 +73,12 @@ export function App(): Node {
   };
 
   /** 进入指定任务的行内编辑态并回填当前文案。 */
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   const startEdit = (todo: Todo) => {
     setEditDraft(todo.text);
     setEditingId(todo.id);
   };
 
   /** 保存行内编辑结果并退出编辑态。 */
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   const saveEdit = () => {
     const id = editingId();
     const text = editDraft().trim();
@@ -93,7 +88,6 @@ export function App(): Node {
   };
 
   /** 放弃行内编辑并恢复查看态。 */
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   const cancelEdit = () => {
     setEditingId(null);
   };
@@ -166,7 +160,77 @@ export function App(): Node {
 
       {/* 任务列表：外层用 <For> 按 todo.id 复用行节点，每行内用 <Show> 切换查看态与行内编辑态。 */}
       <ul class="ns-list">
-        {/* TODO: 用 <For each={visibleTodos} getKey={(todo) => todo.id} fallback={() => <p class="ns-empty">当前筛选下没有待办事项。</p>}> 渲染每一条任务，并在 <li id={`todo-${todo().id}`} class="ns-list-item"> 内用 <Show when={() => editingId() === todo().id}> 切换查看态（复选框、文本、编辑、删除）与编辑态（输入框、保存、取消）。 */}
+        <For
+          each={visibleTodos}
+          getKey={(todo) => todo.id}
+          fallback={() => <p class="ns-empty">当前筛选下没有待办事项。</p>}
+        >
+          {(todo) => (
+            // 行组件只创建一次：所有可能随勾选或编辑变化的字段都留在 () => todo().xxx 中读取。
+            <li id={`todo-${todo().id}`} class="ns-list-item">
+              <Show
+                when={() => editingId() === todo().id}
+                fallback={() => (
+                  // 查看态分支：展示勾选框、任务文案与编辑/删除按钮（用容器 div 作为单节点根）。
+                  <div class="ns-todo-row">
+                    <input
+                      type="checkbox"
+                      class="ns-checkbox"
+                      aria-label={() => (todo().completed ? "标为未完成" : "标为已完成")}
+                      checked={() => todo().completed}
+                      onChange={() => toggleTodo(todo().id)}
+                    />
+                    <span
+                      class={() =>
+                        todo().completed ? "ns-todo-text ns-todo-text-done" : "ns-todo-text"
+                      }
+                    >
+                      {() => todo().text}
+                    </span>
+                    <button
+                      type="button"
+                      class="ns-btn ns-btn-sm"
+                      onClick={() => startEdit(todo())}
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      class="ns-btn ns-btn-sm ns-btn-danger"
+                      onClick={() => removeTodo(todo().id)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                )}
+              >
+                {() => (
+                  // 行内编辑态分支：绑定 editDraft 受控输入框，空白时自动禁用保存按钮。
+                  <div class="ns-todo-row">
+                    <input
+                      type="text"
+                      class="ns-input"
+                      aria-label="编辑待办事项"
+                      value={() => editDraft()}
+                      onInput={(event) => setEditDraft(event.currentTarget.value)}
+                    />
+                    <button
+                      type="button"
+                      class="ns-btn ns-btn-sm"
+                      disabled={() => editDraft().trim().length === 0}
+                      onClick={saveEdit}
+                    >
+                      保存
+                    </button>
+                    <button type="button" class="ns-btn ns-btn-sm" onClick={cancelEdit}>
+                      取消
+                    </button>
+                  </div>
+                )}
+              </Show>
+            </li>
+          )}
+        </For>
       </ul>
 
       {/* 底部统计行：展示总条数、当前可见条数与已完成条数。 */}

@@ -1,0 +1,95 @@
+先在 `examples/todo-app/App.tsx` 中用 `createMemo` 补齐三个派生状态，并删掉顶部的临时 `oxlint-disable-next-line` 注释：
+
+```ts
+const visibleTodos = createMemo(() => {
+  const currentFilter = filter();
+  const list = todos();
+  if (currentFilter === "active") return list.filter((todo) => !todo.completed);
+  if (currentFilter === "completed") return list.filter((todo) => todo.completed);
+  return list;
+});
+
+// 未完成条数经 Object.is 同值截断：仅修改文案时不唤醒状态徽章；已完成条数进一步链式派生。
+const remainingCount = createMemo(() => todos().filter((todo) => !todo.completed).length);
+const completedCount = createMemo(() => todos().length - remainingCount());
+```
+
+接着在 `<ul class="ns-list">` 中组合 `<For>` 与 `<Show>`，按 `todo.id` 复用行节点并切换查看态与编辑态：
+
+```tsx
+<For
+  each={visibleTodos}
+  getKey={(todo) => todo.id}
+  fallback={() => <p class="ns-empty">当前筛选下没有待办事项。</p>}
+>
+  {(todo) => (
+    // 行组件只创建一次：所有可能随勾选或编辑变化的字段都留在 () => todo().xxx 中读取。
+    <li id={`todo-${todo().id}`} class="ns-list-item">
+      <Show
+        when={() => editingId() === todo().id}
+        fallback={() => (
+          // 查看态分支：展示勾选框、任务文案与编辑/删除按钮（用容器 div 作为单节点根）。
+          <div class="ns-todo-row">
+            <input
+              type="checkbox"
+              class="ns-checkbox"
+              aria-label={() => (todo().completed ? "标为未完成" : "标为已完成")}
+              checked={() => todo().completed}
+              onChange={() => toggleTodo(todo().id)}
+            />
+            <span
+              class={() => (todo().completed ? "ns-todo-text ns-todo-text-done" : "ns-todo-text")}
+            >
+              {() => todo().text}
+            </span>
+            <button type="button" class="ns-btn ns-btn-sm" onClick={() => startEdit(todo())}>
+              编辑
+            </button>
+            <button
+              type="button"
+              class="ns-btn ns-btn-sm ns-btn-danger"
+              onClick={() => removeTodo(todo().id)}
+            >
+              删除
+            </button>
+          </div>
+        )}
+      >
+        {() => (
+          // 行内编辑态分支：绑定 editDraft 受控输入框，空白时自动禁用保存按钮。
+          <div class="ns-todo-row">
+            <input
+              type="text"
+              class="ns-input"
+              aria-label="编辑待办事项"
+              value={() => editDraft()}
+              onInput={(event) => setEditDraft(event.currentTarget.value)}
+            />
+            <button
+              type="button"
+              class="ns-btn ns-btn-sm"
+              disabled={() => editDraft().trim().length === 0}
+              onClick={saveEdit}
+            >
+              保存
+            </button>
+            <button type="button" class="ns-btn ns-btn-sm" onClick={cancelEdit}>
+              取消
+            </button>
+          </div>
+        )}
+      </Show>
+    </li>
+  )}
+</For>
+```
+
+保存并启用 `examples/todo-app/App.test.tsx` 中的 5 条测试后：
+
+- 运行 `pnpm dev` 打开 `http://localhost:5173/examples/todo-app/`，就能操作我们用自己从零实现的 `nano-solid` 跑起来的完整 Todo 应用，修改 `src/` 下任意源码也会立刻热更新生效。
+- 运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，90 条测试和构建全部通过。
+
+```sh
+# 查看从题目到解答的全部改动。
+git diff 7.4-learn 7.4-solution -- examples
+```
