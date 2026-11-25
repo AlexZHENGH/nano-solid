@@ -1,0 +1,68 @@
+在 `src/compiler/vite-plugin.ts` 中依次补齐 `shouldTransformId` 与 `nanoSolid` 的 `transform` 钩子：
+
+```ts
+export function shouldTransformId(id: string, exclude?: RegExp[]): boolean {
+  if (id.startsWith("\0")) return false;
+  if (/[\\/]node_modules[\\/]/.test(id)) return false;
+
+  const queryIndex = id.indexOf("?");
+  const filepath = queryIndex === -1 ? id : id.slice(0, queryIndex);
+
+  if (exclude?.some((pattern) => pattern.test(filepath))) return false;
+  if (!/\.[jt]sx$/.test(filepath)) return false;
+
+  if (queryIndex !== -1) {
+    const params = new URLSearchParams(id.slice(queryIndex + 1));
+    if (ASSET_QUERY_KEYS.some((key) => params.has(key))) return false;
+  }
+
+  return true;
+}
+
+export function nanoSolid(options?: NanoSolidPluginOptions): Plugin {
+  return {
+    name: "nano-solid",
+    enforce: "pre",
+    transform(code, id) {
+      if (!shouldTransformId(id, options?.exclude)) {
+        return null;
+      }
+
+      const transformOptions: TransformOptions = {
+        filename: stripQuery(id),
+      };
+      if (options?.runtimeModule !== undefined) {
+        transformOptions.runtimeModule = options.runtimeModule;
+      }
+
+      const result = transformJSX(code, transformOptions);
+      if (!result) {
+        return null;
+      }
+
+      return {
+        code: result.code,
+        map: result.map
+          ? {
+              version: result.map.version,
+              sources: result.map.sources.map((source) => source ?? ""),
+              names: [...result.map.names],
+              mappings: result.map.mappings,
+              ...(result.map.file ? { file: result.map.file } : {}),
+              ...(result.map.sourcesContent
+                ? {
+                    sourcesContent: result.map.sourcesContent.map((entry) => entry ?? ""),
+                  }
+                : {}),
+            }
+          : null,
+      };
+    },
+  };
+}
+```
+
+删掉 `oxlint-disable-next-line` 注释，去掉 `src/compiler/vite-plugin.test.ts` 与 `src/compiler/parity.test.ts` 中 4 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`。你会看到：
+
+- 全部 141 条测试通过（包括在编译器模式下跑通的 `examples/todo-app/App.test.tsx` 与 `src/control-flow.test.tsx`，以及继续走回退路径的 `src/jsx-runtime.test.tsx`）；
+- `vite build` 成功打包根计数器与 Todo 两个多页入口，产物中不再出现任何原生标签的 `jsx()` / `jsxs()` 调用。

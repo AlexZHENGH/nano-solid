@@ -1,5 +1,4 @@
 import type { Plugin } from "vite";
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import { transformJSX, type TransformOptions } from "./transform.ts";
 
 /** nanoSolid Vite 插件的可选配置。 */
@@ -11,11 +10,9 @@ export type NanoSolidPluginOptions = {
 };
 
 /** 属于 Vite 静态资源或 Worker 特殊语义的查询参数，命中时绝不能改写源码。 */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 const ASSET_QUERY_KEYS = ["raw", "url", "inline", "worker", "sharedworker", "init"];
 
 /** 去掉模块 ID 末尾的查询参数，提取真实文件路径供扩展名判断与 source map 使用。 */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function stripQuery(id: string): string {
   const queryIndex = id.indexOf("?");
   return queryIndex === -1 ? id : id.slice(0, queryIndex);
@@ -30,15 +27,23 @@ function stripQuery(id: string): string {
  * @param exclude 可选的排除路径正则列表。
  * @returns 是否应执行编译。
  */
-export function shouldTransformId(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  id: string,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  exclude?: RegExp[],
-): boolean {
+export function shouldTransformId(id: string, exclude?: RegExp[]): boolean {
   // 依次过滤虚拟模块、node_modules、exclude 正则、非 [jt]sx 后缀以及 ASSET_QUERY_KEYS 资源查询。
-  // TODO: 实现 shouldTransformId
-  return false;
+  if (id.startsWith("\0")) return false;
+  if (/[\\/]node_modules[\\/]/.test(id)) return false;
+
+  const queryIndex = id.indexOf("?");
+  const filepath = queryIndex === -1 ? id : id.slice(0, queryIndex);
+
+  if (exclude?.some((pattern) => pattern.test(filepath))) return false;
+  if (!/\.[jt]sx$/.test(filepath)) return false;
+
+  if (queryIndex !== -1) {
+    const params = new URLSearchParams(id.slice(queryIndex + 1));
+    if (ASSET_QUERY_KEYS.some((key) => params.has(key))) return false;
+  }
+
+  return true;
 }
 
 /**
@@ -49,16 +54,45 @@ export function shouldTransformId(
  * @param options 可选的运行时导入路径与排除规则。
  * @returns 标准 Vite Plugin 对象。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 export function nanoSolid(options?: NanoSolidPluginOptions): Plugin {
   return {
     name: "nano-solid",
     enforce: "pre",
-    // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
     transform(code, id) {
       // 先调用 shouldTransformId 过滤，再调用 transformJSX 编译并透传 { code, map }，无改动时返回 null。
-      // TODO: 实现 transform 钩子
-      return null;
+      if (!shouldTransformId(id, options?.exclude)) {
+        return null;
+      }
+
+      const transformOptions: TransformOptions = {
+        filename: stripQuery(id),
+      };
+      if (options?.runtimeModule !== undefined) {
+        transformOptions.runtimeModule = options.runtimeModule;
+      }
+
+      const result = transformJSX(code, transformOptions);
+      if (!result) {
+        return null;
+      }
+
+      return {
+        code: result.code,
+        map: result.map
+          ? {
+              version: result.map.version,
+              sources: result.map.sources.map((source) => source ?? ""),
+              names: [...result.map.names],
+              mappings: result.map.mappings,
+              ...(result.map.file ? { file: result.map.file } : {}),
+              ...(result.map.sourcesContent
+                ? {
+                    sourcesContent: result.map.sourcesContent.map((entry) => entry ?? ""),
+                  }
+                : {}),
+            }
+          : null,
+      };
     },
   };
 }

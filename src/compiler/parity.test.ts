@@ -42,7 +42,7 @@ function evaluatePluginOutput<T>(code: string, bindings: Record<string, unknown>
 }
 
 describe("编译路径与 jsx-runtime 回退路径双路径等价性", () => {
-  it.skip("开启插件编译路径与关闭插件 jsx-runtime 回退路径在 DOM、事件、受控输入、ref 与卸载上完全等价", () => {
+  it("开启插件编译路径与关闭插件 jsx-runtime 回退路径在 DOM、事件、受控输入、ref 与卸载上完全等价", () => {
     const plugin = nanoSolid();
     const transformed = invokePluginTransform(
       plugin,

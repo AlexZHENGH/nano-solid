@@ -14,7 +14,7 @@ function invokePluginTransform(plugin: Plugin, code: string, id: string) {
 }
 
 describe("Vite 插件与 Todo 真实打包验证", () => {
-  it.skip("插件声明 enforce: pre，并精确区分 .tsx/HMR 查询与虚拟模块、node_modules、静态资源查询及 exclude 规则", () => {
+  it("插件声明 enforce: pre，并精确区分 .tsx/HMR 查询与虚拟模块、node_modules、静态资源查询及 exclude 规则", () => {
     const plugin = nanoSolid();
     expect(plugin.name).toBe("nano-solid");
     expect(plugin.enforce).toBe("pre");
@@ -42,7 +42,7 @@ describe("Vite 插件与 Todo 真实打包验证", () => {
     ).toBe(false);
   });
 
-  it.skip("无改写文件返回 null，改写后的文件返回去掉查询串的 source map 并透传 runtimeModule", () => {
+  it("无改写文件返回 null，改写后的文件返回去掉查询串的 source map 并透传 runtimeModule", () => {
     const plugin = nanoSolid({ runtimeModule: "nano-solid/compiler-runtime" });
 
     expect(invokePluginTransform(plugin, "export const n = 1;", "/repo/src/a.tsx")).toBeNull();
@@ -67,7 +67,7 @@ describe("Vite 插件与 Todo 真实打包验证", () => {
     }
   });
 
-  it.skip("通过真实 Vite 打包 examples/todo-app/App.tsx：原生标签直出 DOM，仅保留控制流组件调用并生成 source map", async () => {
+  it("通过真实 Vite 打包 examples/todo-app/App.tsx：原生标签直出 DOM，仅保留控制流组件调用并生成 source map", async () => {
     const output = await build({
       configFile: false,
       logLevel: "silent",
