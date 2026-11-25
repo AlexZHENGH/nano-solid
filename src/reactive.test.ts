@@ -1024,7 +1024,7 @@ it("untrack 暂时屏蔽依赖追踪但保留当前 Owner，内部仍可读到�
   expect(cleanup).toHaveBeenCalledTimes(2);
 });
 
-it.skip("effect 首次执行或重跑时写回自身依赖不会递归重入，而是按顺序排队收敛并正确成对清理", () => {
+it("effect 首次执行或重跑时写回自身依赖不会递归重入，而是按顺序排队收敛并正确成对清理", () => {
   const [count, setCount] = createSignal(0);
   const events: string[] = [];
 
@@ -1057,7 +1057,7 @@ it.skip("effect 首次执行或重跑时写回自身依赖不会递归重入，�
   expect(events.at(-1)).toBe("cleanup:2");
 });
 
-it.skip("在运行中的 effect 内部调用 batch 写回不会打断当前执行，而是等外层 effect 结束后再统一刷新", () => {
+it("在运行中的 effect 内部调用 batch 写回不会打断当前执行，而是等外层 effect 结束后再统一刷新", () => {
   const [step, setStep] = createSignal(0);
   const [label, setLabel] = createSignal("init");
   const order: string[] = [];
@@ -1088,7 +1088,7 @@ it.skip("在运行中的 effect 内部调用 batch 写回不会打断当前执�
   ]);
 });
 
-it.skip("超过 100 个独立计算在同一轮更新中执行不会误触 MAX_UPDATES 熔断", () => {
+it("超过 100 个独立计算在同一轮更新中执行不会误触 MAX_UPDATES 熔断", () => {
   const [version, setVersion] = createSignal(0);
   let totalRuns = 0;
 
@@ -1106,7 +1106,7 @@ it.skip("超过 100 个独立计算在同一轮更新中执行不会误触 MAX_U
   expect(totalRuns).toBe(240);
 });
 
-it.skip("无限自写回的 effect 会在达到 MAX_UPDATES 时熔断抛错，并恢复调度器供后续更新使用", () => {
+it("无限自写回的 effect 会在达到 MAX_UPDATES 时熔断抛错，并恢复调度器供后续更新使用", () => {
   const [loop, setLoop] = createSignal(0);
   const [healthy, setHealthy] = createSignal("a");
   const seenHealthy: string[] = [];
@@ -1129,7 +1129,7 @@ it.skip("无限自写回的 effect 会在达到 MAX_UPDATES 时熔断抛错，�
   expect(seenHealthy).toEqual(["a", "b"]);
 });
 
-it.skip("两个 effect 互相写回形成乒乓死循环时同样会触发熔断并恢复后续更新", () => {
+it("两个 effect 互相写回形成乒乓死循环时同样会触发熔断并恢复后续更新", () => {
   const [left, setLeft] = createSignal(0);
   const [right, setRight] = createSignal(0);
   const [healthy, setHealthy] = createSignal(0);
@@ -1159,7 +1159,7 @@ it.skip("两个 effect 互相写回形成乒乓死循环时同样会触发熔断
   expect(seenHealthy).toEqual([0, 42]);
 });
 
-it.skip("自引用或相互引用的循环 createMemo 会立即抛出循环依赖错误并清理半截订阅", () => {
+it("自引用或相互引用的循环 createMemo 会立即抛出循环依赖错误并清理半截订阅", () => {
   const [flag, setFlag] = createSignal(false);
   const [healthy, setHealthy] = createSignal("ok");
   const seenHealthy: string[] = [];

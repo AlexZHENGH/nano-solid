@@ -1,0 +1,94 @@
+沿用上一节的排队规则。`invalidate` 与 `batch` 退出时先检查是否还有正在执行的计算，队列由最外层计算收尾。
+
+```ts
+function invalidate(source: Source): void {
+  for (const subscriber of source.subscribers) {
+    markDirty(subscriber);
+  }
+  if (batchDepth === 0 && !isFlushing && !currentComputation) {
+    flushEffects();
+  }
+}
+```
+
+接着在 `updateMemo(memo)` 入口加上循环依赖检查，一旦发现当前 memo 正在求值（`memo.running === true`），立刻抛错终止递归：
+
+```ts
+if (memo.disposed) return;
+if (memo.running) {
+  throw new Error("Circular memo dependency detected");
+}
+```
+
+然后在 `runComputation(computation)` 中维护 `computation.running` 防重入，在最外层计算异常时清理半途入队的脏任务，并在最外层计算正常结束且队列非空时调用 `flushEffects()` 顺序消费刚才排入的写回任务：
+
+```ts
+function runComputation(computation: Computation): void {
+  if (computation.disposed || computation.running) return;
+  const previousComputation = currentComputation;
+  const previousOwner = currentOwner;
+  const previousTracking = tracking;
+  currentComputation = computation;
+  currentOwner = computation;
+  try {
+    computation.running = true;
+
+    // 上一轮结束时先完成清理，清理失败也走回滚流程。
+    const errors: unknown[] = [];
+    cleanupDependencies(computation);
+    cleanupChildren(computation, errors);
+    runCleanups(computation, errors);
+    reportCleanupErrors(errors);
+    if (computation.disposed) return;
+
+    tracking = true;
+    if (computation.kind === "effect") {
+      computation.callback();
+    } else {
+      computation.state = "clean";
+      const nextValue = computation.compute();
+      if (!computation.initialized || !Object.is(computation.value, nextValue)) {
+        computation.value = nextValue;
+        computation.version += 1;
+      }
+      computation.initialized = true;
+    }
+  } catch (error) {
+    disposeOwner(computation, []);
+    if (!previousComputation && batchDepth === 0 && !isFlushing) {
+      pendingEffects.clear();
+      pendingMemos.clear();
+    }
+    throw error;
+  } finally {
+    computation.running = false;
+    currentComputation = previousComputation;
+    currentOwner = previousOwner;
+    tracking = previousTracking;
+  }
+
+  if (
+    !currentComputation &&
+    batchDepth === 0 &&
+    !isFlushing &&
+    (pendingEffects.size > 0 || pendingMemos.size > 0)
+  ) {
+    flushEffects();
+  }
+}
+```
+
+最后在 `flushEffects()` 中用 `Map<Computation, number>` 按单个计算节点累计本轮执行次数，单节点超过 `MAX_UPDATES` 时抛错，由 `catch` 清空两个队列、`finally` 恢复 `isFlushing = false`：
+
+```ts
+const runCounts = new Map<Computation, number>();
+const recordRun = (computation: Computation): void => {
+  const nextCount = (runCounts.get(computation) ?? 0) + 1;
+  if (nextCount > MAX_UPDATES) {
+    throw new Error("Maximum reactive update depth exceeded");
+  }
+  runCounts.set(computation, nextCount);
+};
+```
+
+删除 `MAX_UPDATES` 上方的 `oxlint-disable-next-line` 注释，去掉 `src/reactive.test.ts` 中 6 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run`，全部 111 条测试都会通过。
