@@ -43,6 +43,7 @@ import { frontmatter as vitePluginLesson } from "./lessons/9.4-vite-plugin.mdx";
 import { frontmatter as packageAndArchitecture } from "./lessons/10.0-package-and-architecture.mdx";
 import { frontmatter as libraryBuild } from "./lessons/10.1-library-build.mdx";
 import { frontmatter as packageExports } from "./lessons/10.2-package-exports.mdx";
+import { frontmatter as astArchitectureGuard } from "./lessons/10.3-ast-architecture-guard.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -90,6 +91,7 @@ const vitePluginLessonUrl = `${baseUrl}/lessons/9.4-vite-plugin/`;
 const packageAndArchitectureUrl = `${baseUrl}/lessons/10.0-package-and-architecture/`;
 const libraryBuildUrl = `${baseUrl}/lessons/10.1-library-build/`;
 const packageExportsUrl = `${baseUrl}/lessons/10.2-package-exports/`;
+const astArchitectureGuardUrl = `${baseUrl}/lessons/10.3-ast-architecture-guard/`;
 ---
 
 <BookLayout
@@ -196,5 +198,6 @@ const packageExportsUrl = `${baseUrl}/lessons/10.2-package-exports/`;
   <ul class="course-lessons">
     <li><a href={libraryBuildUrl}>{libraryBuild.title}</a></li>
     <li><a href={packageExportsUrl}>{packageExports.title}</a></li>
+    <li><a href={astArchitectureGuardUrl}>{astArchitectureGuard.title}</a></li>
   </ul>
 </BookLayout>

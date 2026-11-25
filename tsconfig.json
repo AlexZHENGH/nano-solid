@@ -35,6 +35,7 @@
     "examples/**/*.ts",
     "examples/**/*.tsx",
     "scripts/**/*.ts",
+    "tools/**/*.ts",
     "vite.config.ts"
   ]
 }

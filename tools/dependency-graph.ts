@@ -1,0 +1,174 @@
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, posix, resolve } from "node:path";
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+import { parse } from "@babel/parser";
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+import traverse from "@babel/traverse";
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+import * as t from "@babel/types";
+
+/** 单条静态模块依赖边：记录来源文件、原始说明符、解析后的仓内相对路径、语法种类、是否纯类型导入与行号。 */
+export type DependencyEdge = {
+  /** 发起导入的文件（相对仓库根、统一正斜杠）。 */
+  from: string;
+  /** 源码里书写的原始模块说明符（如 "./reactive.ts" 或 "nano-solid"）。 */
+  specifier: string;
+  /** 若为相对路径，记录相对仓库根归一化后的正斜杠路径；外部包或裸包名为 null。 */
+  resolvedTo: string | null;
+  /** 语法来源：静态 import、命名重导出、通配重导出或静态字面量动态 import()。 */
+  kind: "import" | "export-named" | "export-all" | "dynamic-import";
+  /** 是否为纯类型导入或重导出（运行时会被 TypeScript 擦除）。 */
+  typeOnly: boolean;
+  /** 该语句或表达式在源文件中的起始行号（1-based）。 */
+  line: number;
+};
+
+/** 一条声明式的架构边界规则。 */
+export type ArchitectureRule = {
+  /** 规则名称，用于违例报告定位。 */
+  name: string;
+  /** 判断来源文件是否受本条规则约束。 */
+  matchFrom: (fromFile: string) => boolean;
+  /** 返回错误说明字符串表示违例；返回 null 表示通过。 */
+  checkEdge: (edge: DependencyEdge) => string | null;
+};
+
+/** 架构规则校验产出的一条违例记录。 */
+export type ArchitectureViolation = {
+  rule: string;
+  from: string;
+  line: number;
+  specifier: string;
+  message: string;
+};
+
+/** 循环依赖检测的可选配置。 */
+export type FindCyclesOptions = {
+  /** 是否把纯类型导入（import type / export type）也纳入环检测；默认 false（仅检查运行时环）。 */
+  includeTypeOnly?: boolean;
+};
+
+/**
+ * 递归扫描指定目录列表中的所有生产 TS / TSX 源文件（默认跳过测试文件），返回按字典序排列的正斜杠相对路径。
+ *
+ * @param rootDir 仓库根目录绝对路径。
+ * @param dirs 要扫描的相对目录列表（如 ["src", "examples/todo-app"]）。
+ * @returns 排序后的相对路径列表。
+ */
+export function listSourceFiles(rootDir: string, dirs: string[]): string[] {
+  const results: string[] = [];
+
+  function walk(absDir: string, relDir: string): void {
+    if (!existsSync(absDir)) return;
+    for (const entry of readdirSync(absDir, { withFileTypes: true })) {
+      const nextRel = relDir ? `${relDir}/${entry.name}` : entry.name;
+      const nextAbs = join(absDir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name === "dist" || entry.name === "dist-demos") {
+          continue;
+        }
+        walk(nextAbs, nextRel);
+        continue;
+      }
+      if (!/\.[tj]sx?$/.test(entry.name)) continue;
+      if (/\.test\.[tj]sx?$/.test(entry.name)) continue;
+      results.push(nextRel);
+    }
+  }
+
+  for (const dir of dirs) {
+    walk(resolve(rootDir, dir), dir.replace(/\\/g, "/"));
+  }
+
+  return results.sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * 将相对导入说明符（./ 或 ../）按来源文件路径归一化为相对仓库根的正斜杠路径；非相对路径（如 "nano-solid"）返回 null。
+ *
+ * @param fromFile 发起导入的文件路径（相对仓库根、正斜杠）。
+ * @param specifier 源码中书写的模块说明符。
+ * @returns 归一化后的仓内相对路径，或 null。
+ */
+export function resolveRelativeModule(fromFile: string, specifier: string): string | null {
+  if (!specifier.startsWith("./") && !specifier.startsWith("../")) {
+    return null;
+  }
+  const fromDir = posix.dirname(fromFile.replace(/\\/g, "/"));
+  return posix.normalize(posix.join(fromDir, specifier));
+}
+
+/**
+ * 使用 Babel 8 AST 从单份 TS / TSX 源码中精确提取所有静态导入、重导出与字面量动态 import() 依赖边，
+ * 自动免疫注释、字符串与模板字面量中的伪造导入文本。
+ *
+ * @param source 原始 TS / TSX 源码字符串。
+ * @param fromFile 当前文件的仓内相对路径（正斜杠）。
+ * @returns 该文件发出的全部依赖边列表。
+ */
+export function extractModuleEdges(
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  source: string,
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  fromFile: string,
+): DependencyEdge[] {
+  // 解析 AST 并遍历 ImportDeclaration、带 source 的 ExportNamedDeclaration、ExportAllDeclaration 与字面量动态 import()，准确标记 typeOnly 与行号。
+  // TODO: 实现 extractModuleEdges
+  throw new Error("TODO: 实现基于 Babel AST 的 extractModuleEdges");
+}
+
+/**
+ * 读取指定文件列表并构建完整仓内依赖图（邻接表：来源文件 -> 依赖边列表）。
+ *
+ * @param files 仓内相对文件路径列表。
+ * @param rootDir 仓库根目录绝对路径。
+ * @returns 以来源文件为键的依赖边邻接表。
+ */
+export function buildDependencyGraph(
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  files: string[],
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  rootDir: string,
+): Map<string, DependencyEdge[]> {
+  // 依次读取每个文件内容并调用 extractModuleEdges 填充邻接表。
+  // TODO: 实现 buildDependencyGraph
+  throw new Error("TODO: 实现 buildDependencyGraph");
+}
+
+/**
+ * 使用三色深度优先搜索（0 未访问 / 1 正在当前递归栈中 / 2 已完成）检测依赖图中的所有有向环，
+ * 将每条环规范化为从字典序最小节点出发的闭环路径并去重返回。
+ *
+ * @param graph 由 buildDependencyGraph 构建的模块依赖图。
+ * @param options 是否包含纯类型导入边的配置（默认仅检查运行时值导入环）。
+ * @returns 去重且确定性排序后的全部循环依赖路径（如 ["a.ts", "b.ts", "a.ts"]）。
+ */
+export function findCycles(
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  graph: Map<string, DependencyEdge[]>,
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  options?: FindCyclesOptions,
+): string[][] {
+  // 对图内节点执行三色 DFS：只有遇到“灰色（在当前栈中）”节点才构成环，避免把菱形 DAG 误判成环。
+  // TODO: 实现三色 DFS 环检测 findCycles
+  throw new Error("TODO: 实现 findCycles");
+}
+
+/**
+ * 按声明式规则集遍历依赖图中的每条边，收集全部架构违例报告。
+ *
+ * @param graph 模块依赖图。
+ * @param rules 要执行的架构规则列表。
+ * @returns 按来源文件与行号稳定排序后的违例数组。
+ */
+export function checkArchitectureRules(
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  graph: Map<string, DependencyEdge[]>,
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  rules: ArchitectureRule[],
+): ArchitectureViolation[] {
+  // 按确定顺序遍历所有来源文件、每条依赖边与匹配规则，汇总非空违例消息。
+  // TODO: 实现 checkArchitectureRules
+  throw new Error("TODO: 实现 checkArchitectureRules");
+}
