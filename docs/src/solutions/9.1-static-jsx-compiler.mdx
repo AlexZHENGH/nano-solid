@@ -1,0 +1,62 @@
+先在 `src/compiler/transform.ts` 中实现 `normalizeJSXText` 与 `canCompileElement`：按标准 JSX 规则处理同行空格与跨行缩进，并递归判定无属性的小写原生标签子树是否可安全编译：
+
+```ts
+export function normalizeJSXText(raw: string): string {
+  return raw
+    .split(/\r\n|\n|\r/)
+    .map((line, index, lines) => {
+      let trimmed = line;
+      if (index > 0) trimmed = trimmed.replace(/^[ \t]+/, "");
+      if (index < lines.length - 1) trimmed = trimmed.replace(/[ \t]+$/, "");
+      return trimmed;
+    })
+    .filter((line) => line.length > 0)
+    .join(" ");
+}
+
+function canCompileElement(element: t.JSXElement): boolean {
+  const opening = element.openingElement;
+  if (!t.isJSXIdentifier(opening.name)) return false;
+  if (!/^[a-z]/.test(opening.name.name)) return false;
+  if (opening.attributes.length > 0) return false;
+
+  return element.children.every((child) => {
+    if (t.isJSXText(child)) return true;
+    if (t.isJSXElement(child)) return canCompileElement(child);
+    if (t.isJSXExpressionContainer(child)) {
+      return t.isJSXEmptyExpression(child.expression) || t.isStringLiteral(child.expression);
+    }
+    return false;
+  });
+}
+```
+
+接着补齐 `emitElement`，用 `scope.generateUidIdentifier("el")` 为每个节点分配唯一局部变量名，把整棵静态子树的 `document.createElement`、`document.createTextNode` 和 `appendChild` 展平收集到同一个 `statements` 数组里。
+
+最后在 `transformJSX` 的 `JSXElement` 访问器里，把 `statements` 连同 `return _el` 包进单层 IIFE 替换当前节点（若父节点仍是未编译的 `JSXElement` 或 `JSXFragment`，套一层 `t.jsxExpressionContainer(iife)`），并调用 `path.skip()` 避免重复遍历已经编译的子树：
+
+```ts
+traverse(ast, {
+  JSXElement(path) {
+    if (!canCompileElement(path.node)) return;
+
+    const statements: t.Statement[] = [];
+    const rootId = emitElement(path.node, path.scope, statements);
+    statements.push(t.returnStatement(t.cloneNode(rootId, true)));
+
+    const iife = t.callExpression(t.arrowFunctionExpression([], t.blockStatement(statements)), []);
+    iife.loc = path.node.loc ?? null;
+
+    if (path.parentPath.isJSXElement() || path.parentPath.isJSXFragment()) {
+      path.replaceWith(t.jsxExpressionContainer(iife));
+    } else {
+      path.replaceWith(iife);
+    }
+
+    changed = true;
+    path.skip();
+  },
+});
+```
+
+删除 `oxlint-disable-next-line` 注释，去掉 `src/compiler/transform.test.ts` 中 6 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run`，全部 123 条测试都会通过。

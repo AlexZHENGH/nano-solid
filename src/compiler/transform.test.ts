@@ -12,7 +12,7 @@ function evaluateCompiledExpression(source: string): Node {
 }
 
 describe("静态原生 JSX 编译器", () => {
-  it.skip("把静态原生标签与纯文本编译为直接 DOM 创建与插入调用，不依赖 jsx 运行时", () => {
+  it("把静态原生标签与纯文本编译为直接 DOM 创建与插入调用，不依赖 jsx 运行时", () => {
     const result = transformJSX("const el = <button>添加</button>;");
     expect(result).not.toBeNull();
     expect(result!.code).toContain('document.createElement("button")');
@@ -26,7 +26,7 @@ describe("静态原生 JSX 编译器", () => {
     expect(node.childNodes[0]?.nodeType).toBe(Node.TEXT_NODE);
   });
 
-  it.skip("把多层嵌套的静态原生标签展平编译进同一个 IIFE，执行后生成等价 DOM 树", () => {
+  it("把多层嵌套的静态原生标签展平编译进同一个 IIFE，执行后生成等价 DOM 树", () => {
     const source = `
       <section>
         <h1>nano-solid</h1>
@@ -50,7 +50,7 @@ describe("静态原生 JSX 编译器", () => {
     expect(node.querySelector("strong")?.textContent).toBe("直接 DOM");
   });
 
-  it.skip('遵循标准 JSX 空白规则：保留同行空格与显式 {" "}，裁掉跨行缩进并忽略 JSX 注释', () => {
+  it('遵循标准 JSX 空白规则：保留同行空格与显式 {" "}，裁掉跨行缩进并忽略 JSX 注释', () => {
     // 1. 直接验证空白清洗函数。
     expect(normalizeJSXText("   ")).toBe("   ");
     expect(normalizeJSXText("\n    \n")).toBe("");
@@ -73,7 +73,7 @@ describe("静态原生 JSX 编译器", () => {
     expect(withCommentAndExplicitSpace.childNodes.length).toBe(3);
   });
 
-  it.skip("保留函数组件与暂未覆盖的带属性/动态表达式原生标签，但继续编译组件内部支持的静态子树", () => {
+  it("保留函数组件与暂未覆盖的带属性/动态表达式原生标签，但继续编译组件内部支持的静态子树", () => {
     const source = `
       function App() {
         return (
@@ -94,13 +94,13 @@ describe("静态原生 JSX 编译器", () => {
     expect(result!.code).toContain('document.createTextNode("静态内容")');
   });
 
-  it.skip("当源码中没有任何可编译的原生 JSX 时返回 null，避免无谓改写", () => {
+  it("当源码中没有任何可编译的原生 JSX 时返回 null，避免无谓改写", () => {
     expect(transformJSX("export const x = 1 + 2;")).toBeNull();
     expect(transformJSX("const el = <Counter />;")).toBeNull();
     expect(transformJSX('const el = <div id="a" />;')).toBeNull();
   });
 
-  it.skip("编译后的输出附带有效 source map", () => {
+  it("编译后的输出附带有效 source map", () => {
     const result = transformJSX("const el = <span>hi</span>;", { filename: "sample.tsx" });
     expect(result).not.toBeNull();
     expect(result!.map).not.toBeNull();
