@@ -1,4 +1,3 @@
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import { Show } from "nano-solid";
 
 /** 持久化降级提示条组件的输入属性。 */
@@ -15,11 +14,24 @@ export type PersistenceBannerProps = {
  * @param props 响应式警告状态 getter。
  * @returns 包含两条条件提示条的原生 DOM 节点。
  */
-export function PersistenceBanner(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  props: PersistenceBannerProps,
-): Node {
+export function PersistenceBanner(props: PersistenceBannerProps): Node {
   // 用两个 <Show> 分别渲染 #load-warning（.ns-banner-warn）与 #save-error（.ns-banner-danger）。
-  // TODO: 实现 PersistenceBanner
-  throw new Error("TODO: 实现 PersistenceBanner");
+  return (
+    <div>
+      <Show when={() => props.loadWarning() !== null}>
+        {() => (
+          <p id="load-warning" class="ns-banner ns-banner-warn">
+            {() => props.loadWarning() ?? ""}
+          </p>
+        )}
+      </Show>
+      <Show when={props.saveError}>
+        {() => (
+          <p id="save-error" class="ns-banner ns-banner-danger">
+            保存失败：本地存储写入异常，本次改动仅保留在页面中，请稍后重试。
+          </p>
+        )}
+      </Show>
+    </div>
+  );
 }

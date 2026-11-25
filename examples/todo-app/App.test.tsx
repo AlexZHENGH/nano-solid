@@ -179,7 +179,7 @@ describe("Todo 示例应用", () => {
     unmount();
   });
 
-  it.skip("通过 localStorage 持久化新增与勾选结果，卸载并重新挂载后完整恢复", () => {
+  it("通过 localStorage 持久化新增与勾选结果，卸载并重新挂载后完整恢复", () => {
     const firstContainer = document.createElement("div");
     const unmountFirst = mountTodoApp(firstContainer);
 
@@ -208,7 +208,7 @@ describe("Todo 示例应用", () => {
     unmountSecond();
   });
 
-  it.skip("删除全部任务后存储为空数组 []，重新挂载时保持空列表而不回退默认示例", () => {
+  it("删除全部任务后存储为空数组 []，重新挂载时保持空列表而不回退默认示例", () => {
     const firstContainer = document.createElement("div");
     const unmountFirst = mountTodoApp(firstContainer);
 
@@ -230,7 +230,7 @@ describe("Todo 示例应用", () => {
     unmountSecond();
   });
 
-  it.skip("恢复稀疏 ID 的历史任务后，新增任务从最大 ID 下一位递增避免 ID 冲突", () => {
+  it("恢复稀疏 ID 的历史任务后，新增任务从最大 ID 下一位递增避免 ID 冲突", () => {
     window.localStorage.setItem(
       DEFAULT_STORAGE_KEY,
       JSON.stringify([
@@ -252,7 +252,7 @@ describe("Todo 示例应用", () => {
     unmount();
   });
 
-  it.skip("仅挂载、切换筛选或输入草稿时不会无谓写入 localStorage", () => {
+  it("仅挂载、切换筛选或输入草稿时不会无谓写入 localStorage", () => {
     const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
     const container = document.createElement("div");
     const unmount = mountTodoApp(container);
@@ -274,7 +274,7 @@ describe("Todo 示例应用", () => {
     unmount();
   });
 
-  it.skip("注入损坏记录或坏 JSON 的内存存储时展示 #load-warning 警告条，且启动时不覆写原存储", () => {
+  it("注入损坏记录或坏 JSON 的内存存储时展示 #load-warning 警告条，且启动时不覆写原存储", () => {
     // 1. 部分损坏与重复 ID：救回有效任务并显示跳过条数。
     const partialStorage = createMemoryTodoStorage({
       initialRaw: JSON.stringify([
@@ -310,7 +310,7 @@ describe("Todo 示例应用", () => {
     unmountBroken();
   });
 
-  it.skip("写入抛错时保留页面新任务并显示 #save-error 提示，存储恢复后再次修改自动保存并撤下提示", () => {
+  it("写入抛错时保留页面新任务并显示 #save-error 提示，存储恢复后再次修改自动保存并撤下提示", () => {
     const storage = createMemoryTodoStorage({ failWrite: true });
     const container = document.createElement("div");
     const unmount = mountTodoApp(container, storage);

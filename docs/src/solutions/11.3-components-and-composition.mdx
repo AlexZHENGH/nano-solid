@@ -1,0 +1,93 @@
+5 个组件都按同一个模式补全：保留骨架里的意图注释，删掉 `// TODO:` 与 `throw`，在原位写出实现。以最关键的 `TodoList` 为例，它持有行内编辑的两个局部信号，并把派生出的行级 getter 交给 `<TodoItem />`：
+
+```tsx
+export function TodoList(props: TodoListProps): Node {
+  const [editingId, setEditingId] = createSignal<number | null>(null);
+  const [editDraft, setEditDraft] = createSignal("");
+
+  const startEdit = (todo: Todo) => {
+    batch(() => {
+      setEditDraft(todo.text);
+      setEditingId(todo.id);
+    });
+  };
+
+  const saveEdit = () => {
+    const id = editingId();
+    const text = editDraft().trim();
+    if (id === null || !text) return;
+    batch(() => {
+      props.onUpdate(id, text);
+      setEditingId(null);
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const removeTodo = (id: number) => {
+    batch(() => {
+      props.onRemove(id);
+      if (editingId() === id) {
+        setEditingId(null);
+      }
+    });
+  };
+
+  return (
+    <ul class="ns-list">
+      <For
+        each={props.todos}
+        getKey={(todo) => todo.id}
+        fallback={() => <p class="ns-empty">当前筛选下没有待办事项。</p>}
+      >
+        {(todo) => (
+          <TodoItem
+            todo={todo}
+            isEditing={() => editingId() === todo().id}
+            editDraft={editDraft}
+            onToggle={props.onToggle}
+            onStartEdit={startEdit}
+            onChangeEditDraft={setEditDraft}
+            onSaveEdit={saveEdit}
+            onCancelEdit={cancelEdit}
+            onRemove={removeTodo}
+          />
+        )}
+      </For>
+    </ul>
+  );
+}
+```
+
+`TodoItem` 把旧 `App.tsx` 里 `<For>` 行内的 `<li>` 原样搬过去，只是把 `todo()`、`editingId() === todo().id` 换成 `props.todo()`、`props.isEditing`。`TodoComposer` 搬走 `draft` 与输入框 ref，`TodoFilters` 与 `PersistenceBanner` 只读 getter 渲染。
+
+最后把 `App.tsx` 改成薄壳：
+
+```tsx
+export function App(props: AppProps): Node {
+  const { store } = props;
+  const [showCompletedDetails, setShowCompletedDetails] = createSignal(false);
+
+  return (
+    <section class="ns-card">
+      {/* 标题与剩余徽章读取 store.remainingCount() */}
+      <PersistenceBanner loadWarning={store.loadWarning} saveError={store.saveError} />
+      <TodoComposer onAdd={store.addTodo} />
+      <TodoFilters filter={store.filter} onSelect={store.setFilter} />
+      <TodoList
+        todos={store.visibleTodos}
+        onToggle={store.toggleTodo}
+        onUpdate={store.updateTodo}
+        onRemove={store.removeTodo}
+      />
+      {/* 统计行与明细面板读取 store.todos()、store.visibleTodos()、store.completedDetails() */}
+    </section>
+  );
+}
+```
+
+`App.tsx` 从近 300 行缩到 80 行左右，不再 import `types.ts` 里的 `INITIAL_TODOS`，也不再出现 `batch` 和 `createMemo`：初始数据、派生计算和批量写入都已经归 Store 或子组件所有。
+
+删掉所有 `oxlint-disable-next-line` 注释，去掉 `examples/todo-app/App.test.tsx` 中 6 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，全部 174 条测试通过，`vite-plugin.test.ts` 也会把拆分后的 6 个 TSX 文件一起编译打包。

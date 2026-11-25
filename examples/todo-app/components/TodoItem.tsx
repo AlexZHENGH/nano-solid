@@ -1,4 +1,3 @@
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import { Show } from "nano-solid";
 import type { Todo } from "../types.ts";
 
@@ -30,11 +29,70 @@ export type TodoItemProps = {
  * @param props 响应式任务 getter 与行级交互回调。
  * @returns 单个 <li> 节点。
  */
-export function TodoItem(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  props: TodoItemProps,
-): Node {
+export function TodoItem(props: TodoItemProps): Node {
   // 渲染 <li id={`todo-${props.todo().id}`}>，内部用 <Show when={props.isEditing}> 切换查看态与编辑态分支。
-  // TODO: 实现 TodoItem
-  throw new Error("TODO: 实现 TodoItem");
+  return (
+    <li id={`todo-${props.todo().id}`} class="ns-list-item">
+      <Show
+        when={props.isEditing}
+        fallback={() => (
+          // 查看态分支：所有动态字段都留在 () => props.todo().xxx 中读取，保证原地细粒度更新。
+          <div class="ns-todo-row">
+            <input
+              type="checkbox"
+              class="ns-checkbox"
+              aria-label={() => (props.todo().completed ? "标为未完成" : "标为已完成")}
+              checked={() => props.todo().completed}
+              onChange={() => props.onToggle(props.todo().id)}
+            />
+            <span
+              class={() =>
+                props.todo().completed ? "ns-todo-text ns-todo-text-done" : "ns-todo-text"
+              }
+            >
+              {() => props.todo().text}
+            </span>
+            <button
+              type="button"
+              class="ns-btn ns-btn-sm"
+              onClick={() => props.onStartEdit(props.todo())}
+            >
+              编辑
+            </button>
+            <button
+              type="button"
+              class="ns-btn ns-btn-sm ns-btn-danger"
+              onClick={() => props.onRemove(props.todo().id)}
+            >
+              删除
+            </button>
+          </div>
+        )}
+      >
+        {() => (
+          // 行内编辑态分支：绑定受控编辑输入框，空白时自动禁用保存按钮。
+          <div class="ns-todo-row">
+            <input
+              type="text"
+              class="ns-input"
+              aria-label="编辑待办事项"
+              value={() => props.editDraft()}
+              onInput={(event) => props.onChangeEditDraft(event.currentTarget.value)}
+            />
+            <button
+              type="button"
+              class="ns-btn ns-btn-sm"
+              disabled={() => props.editDraft().trim().length === 0}
+              onClick={props.onSaveEdit}
+            >
+              保存
+            </button>
+            <button type="button" class="ns-btn ns-btn-sm" onClick={props.onCancelEdit}>
+              取消
+            </button>
+          </div>
+        )}
+      </Show>
+    </li>
+  );
 }
