@@ -24,7 +24,7 @@ function mountDetails() {
 }
 
 describe("Todo 已完成明细的延后计算", () => {
-  it.skip("连续修改先只排队，轮到明细时计算一次最新列表", () => {
+  it("连续修改先只排队，轮到明细时计算一次最新列表", () => {
     const { turns, container, setTodos, calculate, dispose } = mountDetails();
     try {
       // 初次展开和接下来的两次编辑用同一个任务键，明细还没开始计算。

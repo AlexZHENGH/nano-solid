@@ -20,7 +20,6 @@ export type TaskScheduler = {
 type Task = { callback: () => void; priority: TaskPriority };
 
 /** 数字越小，表示等待中的任务应该越早执行。 */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 const priorities: Record<TaskPriority, number> = { "user-blocking": 0, normal: 1, idle: 2 };
 
 /**
@@ -38,8 +37,13 @@ export function createTaskScheduler(
   /** 从仍在等待的任务中选一笔，优先级相同则保留进入队列的顺序。 */
   function pickTask(): [TaskKey, Task] | undefined {
     // 每轮开始才挑任务，这样上一轮等待时新到的高优先级任务也能参与选择。
-    // TODO: 按 priorities 找到优先级最高的任务。
-    return pending.entries().next().value;
+    let chosen: [TaskKey, Task] | undefined;
+    for (const entry of pending) {
+      if (chosen === undefined || priorities[entry[1].priority] < priorities[chosen[1].priority]) {
+        chosen = entry;
+      }
+    }
+    return chosen;
   }
 
   /** 队列有任务且还没有安排下一轮时，交给宿主安排一次执行。 */
@@ -65,16 +69,14 @@ export function createTaskScheduler(
   return {
     schedule(callback, options = {}) {
       // 使用同一个键时，新的安排应该替换还没执行的旧工作。
-      // TODO: 提供 key 时用它关联同一类任务。
-      const key = Symbol();
+      const key = options.key ?? Symbol();
       const task = { callback, priority: options.priority ?? "normal" };
       pending.set(key, task);
       queueTurn();
 
       // 取消函数属于这一次安排，不能取消后来用同一键替换进去的任务。
-      // TODO: 删除前检查队列里的对象是否仍是这次安排。
       return () => {
-        pending.delete(key);
+        if (pending.get(key) === task) pending.delete(key);
       };
     },
   };

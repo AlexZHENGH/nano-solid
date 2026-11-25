@@ -1,0 +1,46 @@
+### 只在找到更高优先级时替换候选
+
+`pending` 已经按排队顺序遍历。选到第一笔后，只有后面碰到更高优先级的任务才换人。相同优先级时保留下来的就是先排队的那一笔。
+
+```ts
+function pickTask(): [TaskKey, Task] | undefined {
+  // 每轮开始才挑任务，这样上一轮等待时新到的高优先级任务也能参与选择。
+  let chosen: [TaskKey, Task] | undefined;
+  for (const entry of pending) {
+    if (chosen === undefined || priorities[entry[1].priority] < priorities[chosen[1].priority]) {
+      chosen = entry;
+    }
+  }
+  return chosen;
+}
+```
+
+### 保留键的位置，只换掉那笔任务
+
+每次调用都创建新的 `task` 对象。同一个键已经存在时，`Map.set` 会替换对应的值。旧任务的取消函数还握着旧对象，比较时自然对不上，所以只能由最新安排的取消函数删掉它。
+
+```ts
+schedule(callback, options = {}) {
+  // 使用同一个键时，新的安排应该替换还没执行的旧工作。
+  const key = options.key ?? Symbol();
+  const task = { callback, priority: options.priority ?? "normal" };
+  pending.set(key, task);
+  queueTurn();
+
+  // 取消函数属于这一次安排，不能取消后来用同一键替换进去的任务。
+  return () => {
+    if (pending.get(key) === task) pending.delete(key);
+  };
+},
+```
+
+`queueTurn` 在回调开始前移除任务，所以回调可以用同一个键安排下一次工作。它会在 `finally` 中安排余下的轮次，即使某笔工作抛出异常，队列里其他任务也不会一直等下去。
+
+想验证合并确实省掉了工作，可以暂时把 `const key = options.key ?? Symbol()` 改成 `const key = Symbol()`，跑下方的明细用例。推进一轮时仍能得到正确的文字，但测试会发现队列里还有重复的整理工作。恢复任务键之后，第一次整理就会把队列里的这类工作做完。
+
+```sh
+# 单跑明细组件的计算和卸载用例。
+pnpm exec vitest run examples/todo-app/components/ScheduledCompletedDetails.test.tsx
+```
+
+在异步 Todo 页面里，勾选会立即写入本地列表，保存会依次等待仓库确认，明细只在展开后排队计算。关掉明细时取消整理任务，重新打开应用时由 Store 负责清理这一次挂载的读写工作。

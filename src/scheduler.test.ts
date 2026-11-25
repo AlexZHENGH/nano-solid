@@ -33,7 +33,7 @@ describe("任务调度器", () => {
     expect(turns).toHaveLength(0);
   });
 
-  it.skip("每轮先挑高优先级任务，同一级仍按排队顺序执行", () => {
+  it("每轮先挑高优先级任务，同一级仍按排队顺序执行", () => {
     const { scheduler, runTurn } = setup();
     const events: string[] = [];
 
@@ -46,7 +46,7 @@ describe("任务调度器", () => {
     expect(events).toEqual(["第一次交互", "第二次交互", "普通任务", "明细"]);
   });
 
-  it.skip("同键替换回调和优先级，旧取消函数不能删掉新的安排", () => {
+  it("同键替换回调和优先级，旧取消函数不能删掉新的安排", () => {
     const { scheduler, turns, runTurn } = setup();
     const events: string[] = [];
 
@@ -65,7 +65,7 @@ describe("任务调度器", () => {
     expect(turns).toHaveLength(0);
   });
 
-  it.skip("取消同键的最新安排后，旧任务也不会执行", () => {
+  it("取消同键的最新安排后，旧任务也不会执行", () => {
     const { scheduler, turns, runTurn } = setup();
     const events: string[] = [];
 
