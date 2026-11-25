@@ -81,7 +81,7 @@ const REPO_ARCHITECTURE_RULES: ArchitectureRule[] = [
 ];
 
 describe("基于 Babel AST 的依赖图架构守卫", () => {
-  it.skip("精确解析静态 import、多行重导出、通配重导出、import type 与动态 import()，且不被注释和字符串误导", () => {
+  it("精确解析静态 import、多行重导出、通配重导出、import type 与动态 import()，且不被注释和字符串误导", () => {
     const sample = `
       // 注释里的假导入绝不能被误判：
       // import { leak } from "../../src/reactive.ts";
@@ -165,7 +165,7 @@ describe("基于 Babel AST 的依赖图架构守卫", () => {
     expect(edges.every((edge) => edge.line > 0)).toBe(true);
   });
 
-  it.skip("三色 DFS 正确区分菱形 DAG 与真实有向环，并支持忽略或包含纯类型环", () => {
+  it("三色 DFS 正确区分菱形 DAG 与真实有向环，并支持忽略或包含纯类型环", () => {
     const edge = (from: string, to: string, typeOnly = false): DependencyEdge => ({
       from,
       specifier: `./${to}`,
@@ -203,7 +203,7 @@ describe("基于 Babel AST 的依赖图架构守卫", () => {
     ]);
   });
 
-  it.skip("架构规则引擎能精准拦截跨层越界导入并报告规则名、文件、行号与非法说明符", () => {
+  it("架构规则引擎能精准拦截跨层越界导入并报告规则名、文件、行号与非法说明符", () => {
     const badGraph = new Map<string, DependencyEdge[]>([
       [
         "examples/todo-app/BadView.tsx",
@@ -247,7 +247,7 @@ describe("基于 Babel AST 的依赖图架构守卫", () => {
     );
   });
 
-  it.skip("仓库真实 src/ 与 examples/todo-app/ 生产源码完全满足架构分层边界规则", () => {
+  it("仓库真实 src/ 与 examples/todo-app/ 生产源码完全满足架构分层边界规则", () => {
     const files = listSourceFiles(ROOT_DIR, ["src", "examples/todo-app"]);
     expect(files.length).toBeGreaterThan(0);
 
@@ -256,7 +256,7 @@ describe("基于 Babel AST 的依赖图架构守卫", () => {
     expect(violations).toEqual([]);
   });
 
-  it.skip("仓库真实 src/ 与 examples/todo-app/ 生产源码不存在任何循环依赖（含纯类型导入）", () => {
+  it("仓库真实 src/ 与 examples/todo-app/ 生产源码不存在任何循环依赖（含纯类型导入）", () => {
     const files = listSourceFiles(ROOT_DIR, ["src", "examples/todo-app"]);
     const graph = buildDependencyGraph(files, ROOT_DIR);
     const cycles = findCycles(graph, { includeTypeOnly: true });

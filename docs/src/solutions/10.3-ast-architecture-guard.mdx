@@ -1,0 +1,38 @@
+在 `tools/dependency-graph.ts` 中依次补齐四个核心函数：
+
+1. **`extractModuleEdges`**：用 `@babel/parser` 解析 TSX/TS 为 AST，遍历 `ImportDeclaration`、带 `source` 的 `ExportNamedDeclaration`、`ExportAllDeclaration` 与 `ImportExpression`（Babel 8 对齐 ESTree，动态 `import("./...")` 是独立的 `ImportExpression` 节点），准确判断语句级和修饰符级的 `typeOnly`，并调用 `resolveRelativeModule` 归一化仓内相对路径。
+2. **`buildDependencyGraph`**：依次读取每个文件并调用 `extractModuleEdges` 填充 `Map<string, DependencyEdge[]>`。
+3. **`findCycles`**：按字典序遍历节点执行三色 DFS（`0` 未访问、`1` 递归栈中、`2` 已完成），只有遇到灰色节点才从栈中截出闭环，并旋转到字典序最小节点出发去重排序：
+
+```ts
+function dfs(node: string): void {
+  color.set(node, 1);
+  stackIndex.set(node, stack.length);
+  stack.push(node);
+
+  for (const edge of graph.get(node) ?? []) {
+    if (!includeTypeOnly && edge.typeOnly) continue;
+    const target = edge.resolvedTo;
+    if (!target || !graph.has(target)) continue;
+
+    const state = color.get(target) ?? 0;
+    if (state === 1) {
+      const startIdx = stackIndex.get(target);
+      if (startIdx !== undefined) {
+        const canonical = canonicalizeCycle(stack.slice(startIdx));
+        uniqueCycles.set(canonical.join(" -> "), canonical);
+      }
+    } else if (state === 0) {
+      dfs(target);
+    }
+  }
+
+  stack.pop();
+  stackIndex.delete(node);
+  color.set(node, 2);
+}
+```
+
+4. **`checkArchitectureRules`**：按来源文件字典序遍历匹配规则和每条依赖边，汇总非空违例消息并按 `from`、`line`、`rule` 稳定排序。
+
+删掉 `oxlint-disable-next-line` 注释，去掉 `tools/architecture.test.ts` 中 5 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run`，全部 154 条测试都会通过。

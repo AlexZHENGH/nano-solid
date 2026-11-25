@@ -1,11 +1,7 @@
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, posix, resolve } from "node:path";
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import { parse } from "@babel/parser";
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import traverse from "@babel/traverse";
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 import * as t from "@babel/types";
 
 /** 单条静态模块依赖边：记录来源文件、原始说明符、解析后的仓内相对路径、语法种类、是否纯类型导入与行号。 */
@@ -107,15 +103,70 @@ export function resolveRelativeModule(fromFile: string, specifier: string): stri
  * @param fromFile 当前文件的仓内相对路径（正斜杠）。
  * @returns 该文件发出的全部依赖边列表。
  */
-export function extractModuleEdges(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  source: string,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  fromFile: string,
-): DependencyEdge[] {
+export function extractModuleEdges(source: string, fromFile: string): DependencyEdge[] {
   // 解析 AST 并遍历 ImportDeclaration、带 source 的 ExportNamedDeclaration、ExportAllDeclaration 与字面量动态 import()，准确标记 typeOnly 与行号。
-  // TODO: 实现 extractModuleEdges
-  throw new Error("TODO: 实现基于 Babel AST 的 extractModuleEdges");
+  const normalizedFrom = fromFile.replace(/\\/g, "/");
+  const ast = parse(source, {
+    sourceType: "module",
+    plugins: ["jsx", "typescript"],
+  });
+
+  const edges: DependencyEdge[] = [];
+  const pushEdge = (
+    specifier: string,
+    kind: DependencyEdge["kind"],
+    typeOnly: boolean,
+    line: number,
+  ): void => {
+    edges.push({
+      from: normalizedFrom,
+      specifier,
+      resolvedTo: resolveRelativeModule(normalizedFrom, specifier),
+      kind,
+      typeOnly,
+      line,
+    });
+  };
+
+  traverse(ast, {
+    ImportDeclaration(path) {
+      const node = path.node;
+      const typeOnly =
+        node.importKind === "type" ||
+        (node.specifiers.length > 0 &&
+          node.specifiers.every(
+            (specifier) => t.isImportSpecifier(specifier) && specifier.importKind === "type",
+          ));
+      pushEdge(node.source.value, "import", typeOnly, node.loc?.start.line ?? 0);
+    },
+    ExportNamedDeclaration(path) {
+      const node = path.node;
+      if (!node.source) return;
+      const typeOnly =
+        node.exportKind === "type" ||
+        (node.specifiers.length > 0 &&
+          node.specifiers.every(
+            (specifier) => t.isExportSpecifier(specifier) && specifier.exportKind === "type",
+          ));
+      pushEdge(node.source.value, "export-named", typeOnly, node.loc?.start.line ?? 0);
+    },
+    ExportAllDeclaration(path) {
+      const node = path.node;
+      pushEdge(
+        node.source.value,
+        "export-all",
+        node.exportKind === "type",
+        node.loc?.start.line ?? 0,
+      );
+    },
+    ImportExpression(path) {
+      const node = path.node;
+      if (!t.isStringLiteral(node.source)) return;
+      pushEdge(node.source.value, "dynamic-import", false, node.loc?.start.line ?? 0);
+    },
+  });
+
+  return edges;
 }
 
 /**
@@ -126,14 +177,17 @@ export function extractModuleEdges(
  * @returns 以来源文件为键的依赖边邻接表。
  */
 export function buildDependencyGraph(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   files: string[],
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   rootDir: string,
 ): Map<string, DependencyEdge[]> {
   // 依次读取每个文件内容并调用 extractModuleEdges 填充邻接表。
-  // TODO: 实现 buildDependencyGraph
-  throw new Error("TODO: 实现 buildDependencyGraph");
+  const graph = new Map<string, DependencyEdge[]>();
+  for (const file of files) {
+    const normalized = file.replace(/\\/g, "/");
+    const source = readFileSync(resolve(rootDir, normalized), "utf8");
+    graph.set(normalized, extractModuleEdges(source, normalized));
+  }
+  return graph;
 }
 
 /**
@@ -145,14 +199,66 @@ export function buildDependencyGraph(
  * @returns 去重且确定性排序后的全部循环依赖路径（如 ["a.ts", "b.ts", "a.ts"]）。
  */
 export function findCycles(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   graph: Map<string, DependencyEdge[]>,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   options?: FindCyclesOptions,
 ): string[][] {
   // 对图内节点执行三色 DFS：只有遇到“灰色（在当前栈中）”节点才构成环，避免把菱形 DAG 误判成环。
-  // TODO: 实现三色 DFS 环检测 findCycles
-  throw new Error("TODO: 实现 findCycles");
+  const includeTypeOnly = options?.includeTypeOnly ?? false;
+  const color = new Map<string, 0 | 1 | 2>();
+  const stack: string[] = [];
+  const stackIndex = new Map<string, number>();
+  const uniqueCycles = new Map<string, string[]>();
+
+  const nodes = Array.from(graph.keys()).sort((a, b) => a.localeCompare(b));
+
+  function canonicalizeCycle(rawCycle: string[]): string[] {
+    let minIndex = 0;
+    for (let i = 1; i < rawCycle.length; i += 1) {
+      if (rawCycle[i]!.localeCompare(rawCycle[minIndex]!) < 0) {
+        minIndex = i;
+      }
+    }
+    const rotated = [...rawCycle.slice(minIndex), ...rawCycle.slice(0, minIndex)];
+    return [...rotated, rotated[0]!];
+  }
+
+  function dfs(node: string): void {
+    color.set(node, 1);
+    stackIndex.set(node, stack.length);
+    stack.push(node);
+
+    const edges = graph.get(node) ?? [];
+    for (const edge of edges) {
+      if (!includeTypeOnly && edge.typeOnly) continue;
+      const target = edge.resolvedTo;
+      if (!target || !graph.has(target)) continue;
+
+      const state = color.get(target) ?? 0;
+      if (state === 1) {
+        const startIdx = stackIndex.get(target);
+        if (startIdx !== undefined) {
+          const canonical = canonicalizeCycle(stack.slice(startIdx));
+          uniqueCycles.set(canonical.join(" -> "), canonical);
+        }
+      } else if (state === 0) {
+        dfs(target);
+      }
+    }
+
+    stack.pop();
+    stackIndex.delete(node);
+    color.set(node, 2);
+  }
+
+  for (const node of nodes) {
+    if ((color.get(node) ?? 0) === 0) {
+      dfs(node);
+    }
+  }
+
+  return Array.from(uniqueCycles.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, cycle]) => cycle);
 }
 
 /**
@@ -163,12 +269,35 @@ export function findCycles(
  * @returns 按来源文件与行号稳定排序后的违例数组。
  */
 export function checkArchitectureRules(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   graph: Map<string, DependencyEdge[]>,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   rules: ArchitectureRule[],
 ): ArchitectureViolation[] {
   // 按确定顺序遍历所有来源文件、每条依赖边与匹配规则，汇总非空违例消息。
-  // TODO: 实现 checkArchitectureRules
-  throw new Error("TODO: 实现 checkArchitectureRules");
+  const violations: ArchitectureViolation[] = [];
+  const files = Array.from(graph.keys()).sort((a, b) => a.localeCompare(b));
+
+  for (const file of files) {
+    const matchingRules = rules.filter((rule) => rule.matchFrom(file));
+    if (matchingRules.length === 0) continue;
+
+    const edges = graph.get(file) ?? [];
+    for (const edge of edges) {
+      for (const rule of matchingRules) {
+        const message = rule.checkEdge(edge);
+        if (message !== null) {
+          violations.push({
+            rule: rule.name,
+            from: file,
+            line: edge.line,
+            specifier: edge.specifier,
+            message,
+          });
+        }
+      }
+    }
+  }
+
+  return violations.sort(
+    (a, b) => a.from.localeCompare(b.from) || a.line - b.line || a.rule.localeCompare(b.rule),
+  );
 }
