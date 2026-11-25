@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, expectTypeOf, it } from "vitest";
+import { packPackageTarball, verifyExternalConsumer } from "../tools/verify-package.ts";
 import { transformJSX } from "./compiler/transform.ts";
 import type { Dispose, ForProps, JSXChild, MemoOptions, ShowProps } from "./index.ts";
 import { batch, createMemo, createRoot, createSignal, render, untrack } from "./index.ts";
@@ -304,4 +306,50 @@ describe("package.json 条件导出、仓内源码条件与 Todo 迁移", () => 
       expect(content).not.toContain("#nano-solid");
     }
   });
+});
+
+describe("独立外部项目打包安装验证", () => {
+  it.skip("pnpm pack 保留发布产物、说明和许可证", () => {
+    const packDir = mkdtempSync(join(tmpdir(), "nano-solid-pack-"));
+    try {
+      const { entries } = packPackageTarball(ROOT_DIR, packDir);
+
+      // 发布包保留包清单、项目说明、许可证和框架入口。
+      expect(entries).toContain("package/package.json");
+      expect(entries).toContain("package/README.md");
+      expect(entries).toContain("package/LICENSE");
+      expect(entries).toContain("package/dist/index.js");
+      expect(entries).toContain("package/dist/index.d.ts");
+      expect(entries).toContain("package/dist/jsx-runtime.js");
+      expect(entries).toContain("package/dist/jsx-runtime.d.ts");
+      expect(entries).toContain("package/dist/compiler-runtime.js");
+      expect(entries).toContain("package/dist/compiler-runtime.d.ts");
+      expect(entries).toContain("package/dist/vite.js");
+      expect(entries).toContain("package/dist/vite.d.ts");
+
+      // 源码、示例、文档、工具、示例构建产物与测试文件绝不能混入发布压缩包。
+      expect(entries.some((entry) => entry.startsWith("package/src/"))).toBe(false);
+      expect(entries.some((entry) => entry.startsWith("package/examples/"))).toBe(false);
+      expect(entries.some((entry) => entry.startsWith("package/docs/"))).toBe(false);
+      expect(entries.some((entry) => entry.startsWith("package/tools/"))).toBe(false);
+      expect(entries.some((entry) => entry.startsWith("package/dist-demos/"))).toBe(false);
+      expect(entries.some((entry) => entry.includes(".test."))).toBe(false);
+    } finally {
+      rmSync(packDir, { recursive: true, force: true });
+    }
+  });
+
+  it.skip("外部独立项目安装 tarball 后，无需 customConditions 与 resolve.conditions 即可跑通 tsc、Vite 插件构建与 Node 运行时", () => {
+    const report = verifyExternalConsumer(ROOT_DIR);
+
+    // 1. 外部消费者 100% 命中 node_modules/nano-solid/dist/*，且深层未导出路径被拦截。
+    expect(report.resolvedRoot).toMatch(/node_modules[\\/]nano-solid[\\/]dist[\\/]index\.js$/);
+    expect(report.resolvedVite).toMatch(/node_modules[\\/]nano-solid[\\/]dist[\\/]vite\.js$/);
+    expect(report.blockedDeepImportCode).toBe("ERR_PACKAGE_PATH_NOT_EXPORTED");
+    expect(report.reactiveSum).toBe(30);
+
+    // 2. 外部项目的 Vite 生产包中已由 nanoSolid() 插件把原生标签编译为直接 DOM 调用。
+    expect(report.bundledJs).toContain("createElement");
+    expect(report.bundledJs).not.toMatch(/jsx(?:s|DEV)?\(\s*["']button["']/);
+  }, 30_000);
 });
