@@ -6,6 +6,7 @@ export {
   createRoot,
   createSignal,
   onCleanup,
+  untrack,
   type Dispose,
   type EffectCallback,
 } from "./reactive.ts";

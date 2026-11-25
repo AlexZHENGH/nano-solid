@@ -6,6 +6,7 @@ import {
   createRoot,
   createSignal,
   onCleanup,
+  untrack,
   type Dispose,
 } from "./reactive.ts";
 
@@ -840,6 +841,189 @@ it("batch 刷新期间某个 effect 抛错后会清空残余队列并恢复后�
   expect(seenOther).toEqual(["a", "b"]);
 });
 
+it.skip("菱形依赖（total 先于 remaining 注册）无毛刺：新增未完成任务时 completed 只算一次且不误唤醒下游", () => {
+  const [todos, setTodos] = createSignal([
+    { id: 1, completed: true },
+    { id: 2, completed: false },
+    { id: 3, completed: false },
+  ]);
+
+  const computeTotal = vi.fn(() => todos().length);
+  const computeRemaining = vi.fn(() => todos().filter((item) => !item.completed).length);
+  const totalCount = createMemo(computeTotal);
+  const remainingCount = createMemo(computeRemaining);
+  const computeCompleted = vi.fn(() => totalCount() - remainingCount());
+  const completedCount = createMemo(computeCompleted);
+
+  const seenCompleted: number[] = [];
+  createEffect(() => {
+    seenCompleted.push(completedCount());
+  });
+
+  expect(seenCompleted).toEqual([1]);
+  expect(computeCompleted).toHaveBeenCalledTimes(1);
+
+  // 新增一条未完成任务：total 3->4、remaining 2->3，completed 应只重算一次得到 1，且不唤醒下游 effect。
+  setTodos([...todos(), { id: 4, completed: false }]);
+
+  expect(computeTotal).toHaveBeenCalledTimes(2);
+  expect(computeRemaining).toHaveBeenCalledTimes(2);
+  expect(computeCompleted).toHaveBeenCalledTimes(2);
+  expect(completedCount()).toBe(1);
+  expect(seenCompleted).toEqual([1]);
+
+  // 新增一条已完成任务：completed 变为 2，下游只收到一次最终值 2。
+  setTodos([...todos(), { id: 5, completed: true }]);
+  expect(computeCompleted).toHaveBeenCalledTimes(3);
+  expect(seenCompleted).toEqual([1, 2]);
+});
+
+it.skip("菱形依赖（remaining 先于 total 注册）同样无毛刺且不依赖注册顺序", () => {
+  const [todos, setTodos] = createSignal([
+    { id: 1, completed: true },
+    { id: 2, completed: false },
+  ]);
+
+  const remainingCount = createMemo(() => todos().filter((item) => !item.completed).length);
+  const totalCount = createMemo(() => todos().length);
+  const computeCompleted = vi.fn(() => totalCount() - remainingCount());
+  const completedCount = createMemo(computeCompleted);
+
+  const seenCompleted: number[] = [];
+  createEffect(() => {
+    seenCompleted.push(completedCount());
+  });
+
+  expect(seenCompleted).toEqual([1]);
+
+  setTodos([...todos(), { id: 3, completed: false }]);
+
+  expect(computeCompleted).toHaveBeenCalledTimes(2);
+  expect(seenCompleted).toEqual([1]);
+});
+
+it.skip("同一个 effect 同时读取源 signal 和派生 memo 时，单次写入只重跑一次且看到一致快照", () => {
+  const [count, setCount] = createSignal(2);
+  const doubled = createMemo(() => count() * 2);
+  const seen: Array<[number, number]> = [];
+
+  createEffect(() => {
+    seen.push([count(), doubled()]);
+  });
+
+  expect(seen).toEqual([[2, 4]]);
+
+  setCount(5);
+  expect(seen).toEqual([
+    [2, 4],
+    [5, 10],
+  ]);
+});
+
+it.skip("在 batch 中途读取 createMemo 会按需刷新到最新一致值，同时下游 effect 仍等到 batch 结束", () => {
+  const [count, setCount] = createSignal(2);
+  const computeDoubled = vi.fn(() => count() * 2);
+  const doubled = createMemo(computeDoubled);
+  const seen: number[] = [];
+
+  createEffect(() => {
+    seen.push(doubled());
+  });
+
+  expect(seen).toEqual([4]);
+  expect(computeDoubled).toHaveBeenCalledTimes(1);
+
+  let midBatchValue = -1;
+  batch(() => {
+    setCount(10);
+    // 批次内显式读取 memo 立即按需拉取最新值 20，但下游 effect 仍暂缓执行。
+    midBatchValue = doubled();
+    expect(seen).toEqual([4]);
+  });
+
+  expect(midBatchValue).toBe(20);
+  // 退出 batch 后不再重复计算已干净的 doubled，下游 effect 只运行一次。
+  expect(computeDoubled).toHaveBeenCalledTimes(2);
+  expect(seen).toEqual([4, 20]);
+});
+
+it.skip("batch 同时关闭分支并置空数据时，先跑外层 effect 释放死分支，不误跑已退出的孤儿 memo", () => {
+  const [show, setShow] = createSignal(true);
+  const [user, setUser] = createSignal<{ name: string } | null>({ name: "Ada" });
+  const seenNames: string[] = [];
+  const computeName = vi.fn(() => {
+    const current = user();
+    if (!current) {
+      throw new Error("orphan memo should not run after branch disposed");
+    }
+    return current.name;
+  });
+
+  let disposeBranch: Dispose | undefined;
+  createEffect(() => {
+    if (show()) {
+      createRoot((dispose) => {
+        disposeBranch = dispose;
+        const userName = createMemo(computeName);
+        createEffect(() => {
+          seenNames.push(userName());
+        });
+      });
+    } else {
+      disposeBranch?.();
+      disposeBranch = undefined;
+    }
+  });
+
+  expect(seenNames).toEqual(["Ada"]);
+  expect(computeName).toHaveBeenCalledTimes(1);
+
+  // 同时隐藏分支并把 user 置空：外层 effect 先释放子分支里的 memo，避免崩溃。
+  expect(() => {
+    batch(() => {
+      setShow(false);
+      setUser(null);
+    });
+  }).not.toThrow();
+
+  expect(computeName).toHaveBeenCalledTimes(1);
+});
+
+it.skip("untrack 暂时屏蔽依赖追踪但保留当前 Owner，内部仍可读到最新值并随父作用域释放", () => {
+  const [tracked, setTracked] = createSignal(1);
+  const [ignored, setIgnored] = createSignal(10);
+  const seen: Array<[number, number]> = [];
+  const cleanup = vi.fn();
+
+  const dispose = createEffect(() => {
+    const a = tracked();
+    const b = untrack(() => {
+      // untrack 只关闭追踪，不切断 Owner：内部登记的 onCleanup 仍归属于当前 effect。
+      onCleanup(cleanup);
+      return ignored();
+    });
+    seen.push([a, b]);
+  });
+
+  expect(seen).toEqual([[1, 10]]);
+  expect(cleanup).toHaveBeenCalledTimes(0);
+
+  // 修改仅在 untrack 内读取的 ignored，不应触发外层 effect 重跑。
+  setIgnored(20);
+  expect(seen).toEqual([[1, 10]]);
+
+  // 修改被追踪的 tracked 时，会触发上一轮清理并在 untrack 内读到最新的 ignored 值 20。
+  setTracked(2);
+  expect(cleanup).toHaveBeenCalledTimes(1);
+  expect(seen).toEqual([
+    [1, 10],
+    [2, 20],
+  ]);
+
+  dispose();
+  expect(cleanup).toHaveBeenCalledTimes(2);
+});
+
 it("清理回调抛错时仍释放兄弟 effect 和父作用域", () => {
   const [count, setCount] = createSignal(0);
   const observed = vi.fn();
@@ -884,4 +1068,24 @@ it("初始化失败时完成回滚并重抛原始异常", () => {
   }
 
   expect(cleanup).toHaveBeenCalledTimes(2);
+});
+
+it.skip("untrack 屏蔽读取追踪，写入等当前 effect 结束再刷新", () => {
+  const [count, setCount] = createSignal(0);
+  const [ignored, setIgnored] = createSignal(0);
+  const seen: number[] = [];
+
+  // 把这一轮读到的值留到回调末尾再记录，检测有无提前重入。
+  const dispose = createEffect(() => {
+    const value = count();
+    untrack(() => {
+      ignored();
+      if (value === 0) setCount(1);
+    });
+    seen.push(value);
+  });
+
+  setIgnored(1);
+  expect(seen).toEqual([0, 1]);
+  dispose();
 });

@@ -37,6 +37,6 @@ flowchart TD
 这一章分四小节把 `src/reactive.ts` 升级为工业级的细粒度响应式内核：
 
 - **[8.1 批量更新 `batch`](../8.1-batch/)**：引入嵌套批处理计数与同步刷新队列，把同一操作内的多次 signal 写入合并为一次集中通知，并改造 Todo 应用中的成组写入。
-- **8.2 三态 Push-Pull 依赖图、菱形消毛刺与 `untrack`**：把 `createMemo` 升级为带 `CLEAN / CHECK / DIRTY` 三态和版本号的独立图节点，彻底消除菱形毛刺并让 `batch` 内读 memo 随时拿到最新一致值，同时导出 `untrack`。
+- **[8.2 三态 Push-Pull 依赖图、菱形消毛刺与 `untrack`](../8.2-diamond-and-untrack/)**：把 `createMemo` 升级为带 `CLEAN / CHECK / DIRTY` 三态和版本号的独立图节点，彻底消除菱形毛刺并让 `batch` 内读 memo 随时拿到最新一致值，同时导出 `untrack`。
 - **8.3 重入保护、死循环熔断与异常恢复**：处理 effect 写回自身依赖的重入排队、按单计算计数的 `MAX_UPDATES` 死循环熔断、memo 循环依赖报错以及异常后的队列状态恢复。
 - **8.4 惰性求值 `createMemo(compute, { lazy: true })`**：支持按需延迟计算的惰性 memo，无人读取时不白算，并在 Todo 应用中落地可折叠的按需派生明细。

@@ -16,20 +16,54 @@ type Owner = {
 };
 
 /**
- * 内部维护的 effect 节点：同时是一个 Owner，保存用户回调与反向依赖集合。
+ * 响应式数据源（signal 与 memo 的公共上游结构）：维护下游订阅者集合与单调递增的版本号。
  */
-type Effect = Owner & {
-  callback: EffectCallback;
-  dependencies: Set<Set<Effect>>;
+type Source = {
+  subscribers: Set<Computation>;
+  version: number;
 };
 
-/** 记录当前同步执行中的 effect，getter 靠它知道这次读取该登记给谁。 */
-let currentEffect: Effect | undefined;
+/**
+ * 计算节点的公共底座：同时是 Owner，并以 Map 记录上一轮按读取顺序访问过的上游数据源及其版本号快照。
+ */
+type ComputationBase = Owner & {
+  dependencies: Map<Source, number>;
+};
 
-/** 记录当前活跃的所有权作用域，新创建的子 effect 与清理回调会自动归属于它。 */
+/** 内部维护的 effect 计算节点：保存用户副作用回调。 */
+type Effect = ComputationBase & {
+  kind: "effect";
+  callback: EffectCallback;
+};
+
+/** memo 的三态标记：clean（缓存新鲜）、check（上游 memo 可能变化）、dirty（直接依赖已变化）。 */
+type MemoState = "clean" | "check" | "dirty";
+
+/**
+ * 内部维护的 memo 计算节点：既是下游 Computation（追踪上游依赖），又是上游 Source（供下游订阅并维护版本号）。
+ */
+type Memo<T = unknown> = ComputationBase &
+  Source & {
+    kind: "memo";
+    compute: () => T;
+    value: T | undefined;
+    initialized: boolean;
+    state: MemoState;
+  };
+
+/** 响应式依赖图中的计算节点联合类型。 */
+type Computation = Effect | Memo;
+
+/** 记录当前同步执行中的计算节点（effect 或 memo），读值时靠它建立依赖边并记录版本快照。 */
+let currentComputation: Computation | undefined;
+
+/** 计算仍在执行时，可以暂时关闭依赖登记，写入仍按执行顺序排队。 */
+let tracking = true;
+
+/** 记录当前活跃的所有权作用域，新创建的子计算与清理回调会自动归属于它。 */
 let currentOwner: Owner | undefined;
 
-/** 当前嵌套的 batch 深度；大于 0 时把受影响的 effect 暂存进队列，等最外层退出再统一刷新。 */
+/** 当前嵌套的 batch 深度；大于 0 时把受影响的计算暂存进队列，等最外层退出再统一刷新。 */
 let batchDepth = 0;
 
 /** 标记当前是否正在执行 flushEffects，避免刷新途中触发嵌套刷新。 */
@@ -38,23 +72,142 @@ let isFlushing = false;
 /** 等待本轮统一执行的去重 effect 队列。 */
 const pendingEffects = new Set<Effect>();
 
+/** 等待本轮补刷的独立急切 memo 队列。 */
+const pendingMemos = new Set<Memo>();
+
 /**
- * 同步清空 pendingEffects 队列：循环取出快照逐个执行，确保刷新途中新入队的 effect 也能在同一轮收尾；若中途抛错则清空残余队列并恢复 isFlushing 状态。
+ * 判断一个上游 Source 是否为 Memo 节点（只有 Memo 需要在 Pull 阶段递归核对并刷新）。
+ *
+ * @param source 上游数据源节点。
+ * @returns 是否为 Memo。
+ */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+function isMemo(source: Source): source is Memo {
+  return "kind" in source && source.kind === "memo";
+}
+
+/**
+ * 在当前同步执行的计算节点与上游数据源之间登记双向依赖，并记录此刻观察到的上游版本号。
+ *
+ * @param source 本次被读取的 signal 或 memo 数据源。
+ */
+function track(source: Source): void {
+  // 只有在已开启追踪且未释放的计算节点执行期间读值，才建立双向边并记下当前的 source.version 快照。
+  if (!tracking || !currentComputation || currentComputation.disposed) return;
+  source.subscribers.add(currentComputation);
+  currentComputation.dependencies.set(source, source.version);
+}
+
+/**
+ * Push 阶段（间接下游）：把下游 memo 从 clean 标为 check 并继续向下传播，把叶子 effect 加入 pendingEffects。
+ *
+ * @param computation 收到上游“可能变化”信号的下游计算节点。
+ */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+function markCheck(
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  computation: Computation,
+): void {
+  // 已释放直接跳过；effect 加入 pendingEffects；仅当 memo 当前为 clean 时置为 check、入队 pendingMemos 并递归通知其下游。
+  // TODO: 实现 markCheck 的三态传播逻辑。
+}
+
+/**
+ * Push 阶段（直接下游）：把直接订阅者标为 dirty（effect 则直接入队），并把更下游节点标为 check。
+ *
+ * @param computation 直接订阅了已变化 signal 的计算节点。
+ */
+function markDirty(computation: Computation): void {
+  // 已释放直接跳过；effect 加入 pendingEffects；memo 若还不是 dirty 则置为 dirty 并对其下游调用 markCheck，同时入队 pendingMemos。
+  // TODO: 升级为三态 Push 标脏（置为 dirty、递归 markCheck 下游、入队 pendingMemos）。
+  if (computation.disposed) return;
+  if (computation.kind === "effect") {
+    pendingEffects.add(computation);
+    return;
+  }
+  pendingMemos.add(computation);
+}
+
+/**
+ * 上游 signal 值变化后触发失效传播：标记直接与间接下游，并在最外层且未刷新时立即执行同步刷新。
+ *
+ * @param source 版本号刚刚递增的 signal 数据源。
+ */
+function invalidate(source: Source): void {
+  for (const subscriber of source.subscribers) {
+    markDirty(subscriber);
+  }
+  // 排队可以发生在当前计算内，刷新要等到它退出。
+  if (batchDepth === 0 && !isFlushing && !currentComputation) {
+    flushEffects();
+  }
+}
+
+/**
+ * Pull 阶段版本核对：按上一轮读取顺序检查依赖；遇到上游 memo 先调用 updateMemo 拉取最新状态，只要发现任意依赖版本号变化立即返回 true 短路。
+ *
+ * @param computation 待确认是否真的需要重算的 memo 或 effect。
+ * @returns 是否有至少一个上游依赖版本号发生变化。
+ */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+function dependenciesChanged(
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  computation: Computation,
+): boolean {
+  // 遍历 computation.dependencies，若上游是 Memo 先调用 updateMemo(source)，一旦 source.version !== observedVersion 立刻短路返回 true。
+  // TODO: 实现按读取顺序短路的上游版本核对逻辑。
+  return true;
+}
+
+/**
+ * Pull 阶段按需刷新 memo：dirty 直接重算，check 先核对上游版本（未变则直接切回 clean 跳过重算），clean 或已释放则直接返回。
+ *
+ * @param memo 需要保证缓存最新一致的 memo 节点。
+ */
+function updateMemo(memo: Memo): void {
+  // 已释放直接返回缓存；未初始化或 dirty 直接调用 runComputation(memo)；check 时仅在 dependenciesChanged(memo) 为真时重算，否则标回 clean。
+  // TODO: 补齐 dirty 与 check 状态下的按需拉取与重算逻辑。
+  if (memo.disposed) return;
+  if (!memo.initialized) {
+    runComputation(memo);
+  }
+}
+
+/**
+ * 同步清空待执行队列：先处理 pendingEffects（按需拉取依赖并在版本确实变化时重跑，顺带释放已退出的子分支），再补刷剩余的独立急切 memo。
  */
 function flushEffects(): void {
-  // 已在刷新中则直接返回，否则置位 isFlushing 并按轮次取快照执行；抛错时清空 pendingEffects，最后在 finally 中复原 isFlushing。
+  // 已在刷新中则直接返回；循环先消费 pendingEffects（经 dependenciesChanged 校验），再消费 pendingMemos（经 updateMemo 补刷）；异常时清空两队列并复原 isFlushing。
+  // TODO: 改为先消费 pendingEffects（经 dependenciesChanged 校验）再消费 pendingMemos（经 updateMemo 补刷）。
   if (isFlushing) return;
   isFlushing = true;
   try {
-    while (pendingEffects.size > 0) {
+    while (pendingMemos.size > 0 || pendingEffects.size > 0) {
+      if (pendingMemos.size > 0) {
+        const memos = Array.from(pendingMemos);
+        pendingMemos.clear();
+        for (const memo of memos) {
+          if (memo.disposed) continue;
+          const prevVersion = memo.version;
+          runComputation(memo);
+          if (memo.version !== prevVersion) {
+            for (const subscriber of memo.subscribers) {
+              markDirty(subscriber);
+            }
+          }
+        }
+        continue;
+      }
+
       const queue = Array.from(pendingEffects);
       pendingEffects.clear();
       for (const effect of queue) {
-        runEffect(effect);
+        runComputation(effect);
       }
     }
   } catch (error) {
     pendingEffects.clear();
+    pendingMemos.clear();
     throw error;
   } finally {
     isFlushing = false;
@@ -62,16 +215,16 @@ function flushEffects(): void {
 }
 
 /**
- * 把 effect 从它上一轮订阅过的所有 signal 中移除，并清空自身依赖记录。
+ * 把计算节点从它上一轮订阅过的所有数据源中移除，并清空自身依赖记录。
  *
- * @param effect 即将重跑或待释放的 effect 节点。
+ * @param computation 即将重跑或待释放的计算节点。
  */
-function cleanupDependencies(effect: Effect): void {
-  // 逐个通知上一轮读过的 signal 删掉当前 effect，再清空反向集合，避免旧分支残留订阅。
-  for (const subscribers of effect.dependencies) {
-    subscribers.delete(effect);
+function cleanupDependencies(computation: Computation): void {
+  // 逐个通知上一轮读过的数据源删掉当前计算节点，再清空反向 Map，避免旧分支残留订阅。
+  for (const source of computation.dependencies.keys()) {
+    source.subscribers.delete(computation);
   }
-  effect.dependencies.clear();
+  computation.dependencies.clear();
 }
 
 /**
@@ -96,12 +249,12 @@ function cleanupChildren(owner: Owner, errors: unknown[]): void {
  * @param owner 即将重跑或待释放的所有权节点。
  */
 function runCleanups(owner: Owner, errors: unknown[]): void {
-  // 先取出并清空 owner.cleanups，再在置空 currentEffect / currentOwner 的上下文中逆序执行，最后恢复外层上下文。
+  // 先取出并清空 owner.cleanups，再在关闭追踪并置空 currentOwner 的上下文中逆序执行，最后恢复外层上下文。
   if (owner.cleanups.length === 0) return;
   const cleanups = owner.cleanups.splice(0).reverse();
-  const previousEffect = currentEffect;
+  const previousTracking = tracking;
   const previousOwner = currentOwner;
-  currentEffect = undefined;
+  tracking = false;
   currentOwner = undefined;
   try {
     for (const cleanup of cleanups) {
@@ -113,7 +266,7 @@ function runCleanups(owner: Owner, errors: unknown[]): void {
       }
     }
   } finally {
-    currentEffect = previousEffect;
+    tracking = previousTracking;
     currentOwner = previousOwner;
   }
 }
@@ -156,35 +309,60 @@ function dispose(owner: Owner): void {
 }
 
 /**
- * 在追踪与所有权上下文中执行 effect：跳过已释放节点，清理上一轮依赖、子作用域与清理回调，运行回调重建本轮订阅；若中途抛错则释放半截资源，最后恢复外层上下文。
+ * 在追踪与所有权上下文中执行计算节点（effect 或 memo）：清理旧依赖、旧子作用域与旧清理回调，重新求值并在 memo 值变化时递增 version；若中途抛错则释放半截资源并恢复外层上下文。
  *
- * @param effect 本轮要执行的 effect 节点。
+ * @param computation 本轮要执行的 effect 或 memo 节点。
  */
-function runEffect(effect: Effect): void {
-  // 同一轮通知快照里，前面的 effect 可能已经释放了当前节点，进入前必须先跳过。
-  if (effect.disposed) return;
+function runComputation(computation: Computation): void {
+  // 同一轮队列快照里，前面的计算可能已经释放了当前节点，进入前必须先跳过。
+  if (computation.disposed) return;
   // 保存外层追踪与所有权上下文，并在 try/finally 中恢复；若回调抛错，则在 catch 中释放半截订阅与子作用域后继续抛出。
-  const previousEffect = currentEffect;
+  const previousComputation = currentComputation;
   const previousOwner = currentOwner;
-  currentEffect = effect;
-  currentOwner = effect;
+  const previousTracking = tracking;
+  currentComputation = computation;
+  currentOwner = computation;
   try {
     // 开始新一轮前先完成上一轮的全部清理；清理失败时按执行失败回滚。
     const errors: unknown[] = [];
-    cleanupDependencies(effect);
-    cleanupChildren(effect, errors);
-    runCleanups(effect, errors);
+    cleanupDependencies(computation);
+    cleanupChildren(computation, errors);
+    runCleanups(computation, errors);
     reportCleanupErrors(errors);
-    if (effect.disposed) return;
+    if (computation.disposed) return;
 
-    effect.callback();
+    // 新计算独立登记依赖，即使它是从 untrack 内启动的。
+    tracking = true;
+    if (computation.kind === "effect") {
+      computation.callback();
+    } else {
+      // 先复位为 clean 再执行 compute：确保万一求值期间再次被标脏不会被事后覆写。
+      computation.state = "clean";
+      const nextValue = computation.compute();
+      if (!computation.initialized || !Object.is(computation.value, nextValue)) {
+        computation.value = nextValue;
+        computation.version += 1;
+      }
+      computation.initialized = true;
+    }
   } catch (error) {
     // 回滚半截资源，并让调用者收到触发回滚的原始异常。
-    disposeOwner(effect, []);
+    disposeOwner(computation, []);
+    // 顶层计算失败后，丢弃这轮留下的待刷新任务。
+    if (!previousComputation && batchDepth === 0 && !isFlushing) {
+      pendingEffects.clear();
+      pendingMemos.clear();
+    }
     throw error;
   } finally {
-    currentEffect = previousEffect;
+    currentComputation = previousComputation;
     currentOwner = previousOwner;
+    tracking = previousTracking;
+  }
+
+  // 最外层计算完成后，同步处理执行期间排入的更新。
+  if (!currentComputation && batchDepth === 0 && !isFlushing) {
+    flushEffects();
   }
 }
 
@@ -201,13 +379,25 @@ export function onCleanup(cleanup: Dispose): void {
 }
 
 /**
+ * 暂时关闭依赖追踪执行回调：内部读到的 signal 与 memo 不会登记为外层计算的依赖，但仍保留当前活跃的 Owner 所有权作用域。
+ *
+ * @param fn 不希望建立依赖追踪的同步回调函数。
+ * @returns fn 的返回值。
+ */
+export function untrack<T>(fn: () => T): T {
+  // 只暂停依赖登记，让当前计算和所有权保持不变，最后恢复追踪开关。
+  // TODO: 保存 tracking，设为 false 后调用 fn，再通过 finally 恢复。
+  return fn();
+}
+
+/**
  * 创建一个独立的可释放根作用域：不挂入外层所有权树且屏蔽外层依赖追踪，在 setup 抛错时自动回滚已登记资源并原样重抛。
  *
  * @param setup 接收根作用域 dispose 句柄的初始化函数。
  * @returns setup 函数的返回值。
  */
 export function createRoot<T>(setup: (dispose: Dispose) => T): T {
-  // 建立独立的 root Owner，在暂存外层 currentEffect / currentOwner 后置空追踪上下文并切换到 root，初始化抛错时完成回滚并保留原始异常。
+  // 建立独立的 root Owner，在暂停追踪并切换到 root，初始化抛错时完成回滚并保留原始异常。
   const root: Owner = {
     parent: undefined,
     children: new Set(),
@@ -215,9 +405,9 @@ export function createRoot<T>(setup: (dispose: Dispose) => T): T {
     disposed: false,
   };
   const disposeRoot: Dispose = () => dispose(root);
-  const previousEffect = currentEffect;
+  const previousTracking = tracking;
   const previousOwner = currentOwner;
-  currentEffect = undefined;
+  tracking = false;
   currentOwner = root;
   try {
     return setup(disposeRoot);
@@ -226,25 +416,26 @@ export function createRoot<T>(setup: (dispose: Dispose) => T): T {
     disposeOwner(root, []);
     throw error;
   } finally {
-    currentEffect = previousEffect;
+    tracking = previousTracking;
     currentOwner = previousOwner;
   }
 }
 
 /**
- * 立即执行一次回调，让内部读取到的 signal 自动把回调登记为依赖，并将当前 effect 归入活跃的 Owner，返回停止订阅的释放函数。
+ * 立即执行一次回调，让内部读取到的 signal 或 memo 自动把回调登记为依赖，并将当前 effect 归入活跃的 Owner，返回停止订阅的释放函数。
  *
  * @param callback 读取 signal 并执行副作用的回调函数。
  * @returns 调用后即可退订并释放该 effect 及其后代的释放函数。
  */
 export function createEffect(callback: EffectCallback): Dispose {
   const effect: Effect = {
+    kind: "effect",
     parent: currentOwner,
     children: new Set(),
     cleanups: [],
     disposed: false,
     callback,
-    dependencies: new Set(),
+    dependencies: new Map(),
   };
   effect.onDispose = () => {
     cleanupDependencies(effect);
@@ -256,33 +447,51 @@ export function createEffect(callback: EffectCallback): Dispose {
     currentOwner.children.add(effect);
   }
 
-  runEffect(effect);
+  runComputation(effect);
   return () => dispose(effect);
 }
 
 /**
- * 创建一个带缓存的派生状态：依赖变化时重新计算，仅当新旧结果按 Object.is 不同时通知下游，并随当前 Owner 自动释放。
+ * 创建一个三态 Push-Pull 派生节点：写入时仅标脏，读取或刷新下游时按需核对上游版本并缓存结果，仅当新旧值按 Object.is 不同时递增版本号，并随当前 Owner 自动释放。
  *
- * @param compute 读取上游 signal 并返回派生结果的纯计算函数。
- * @returns 读取当前缓存值的 getter（在 effect 内读取时会订阅该派生状态）。
+ * @param compute 读取上游 signal 或 memo 并返回派生结果的纯计算函数。
+ * @returns 读取当前最新一致缓存值的 getter（在计算节点内读取时会订阅该派生节点）。
  */
 export function createMemo<T>(compute: () => T): () => T {
-  // 用内部 signal 存缓存值，并用 createEffect 驱动重算；首次执行先初始化缓存，后续通过 set 复用 Object.is 同值截断。
-  let initialized = false;
-  let get!: () => T;
-  let set!: (next: T) => void;
+  const memo: Memo<T> = {
+    kind: "memo",
+    parent: currentOwner,
+    children: new Set(),
+    cleanups: [],
+    disposed: false,
+    dependencies: new Map(),
+    subscribers: new Set(),
+    version: 0,
+    compute,
+    value: undefined,
+    initialized: false,
+    state: "dirty",
+  };
+  memo.onDispose = () => {
+    cleanupDependencies(memo);
+    pendingMemos.delete(memo);
+    memo.subscribers.clear();
+  };
 
-  createEffect(() => {
-    const next = compute();
-    if (!initialized) {
-      initialized = true;
-      [get, set] = createSignal(next);
-    } else {
-      set(next);
-    }
-  });
+  // 若存在未释放的父作用域，把当前 memo 挂入其 children，随父作用域销毁一并退订。
+  if (currentOwner && !currentOwner.disposed) {
+    currentOwner.children.add(memo);
+  }
 
-  return () => get();
+  // 默认急切求值：创建时立即计算首版缓存，确保初始化抛错第一时间暴露。
+  updateMemo(memo);
+
+  return function get(): T {
+    // 先按需刷新确保 memo.value 与 memo.version 为最新一致状态，再向当前外层计算登记订阅。
+    updateMemo(memo);
+    track(memo);
+    return memo.value as T;
+  };
 }
 
 /**
@@ -304,7 +513,7 @@ export function batch<T>(fn: () => T): T {
     callbackError = error;
   } finally {
     batchDepth -= 1;
-    if (batchDepth === 0 && !isFlushing) {
+    if (batchDepth === 0 && !isFlushing && !currentComputation) {
       if (hasCallbackError) {
         try {
           flushEffects();
@@ -330,45 +539,34 @@ export function batch<T>(fn: () => T): T {
  */
 export function createSignal<T>(initialValue: T) {
   let value = initialValue;
-  // 保存依赖这个 signal 的 effect 集合。
-  const subscribers = new Set<Effect>();
+  // 保存依赖这个 signal 的计算节点集合与单调递增的版本号。
+  const source: Source = {
+    subscribers: new Set(),
+    version: 0,
+  };
 
   /**
-   * 读取当前闭包里保存的值，并在未释放的 effect 执行期间建立双向依赖关系。
+   * 读取当前闭包里保存的值，并在未释放的计算节点执行期间建立双向依赖关系。
    *
    * @returns 最新状态。
    */
   function get(): T {
-    // 只有在同步执行中的 effect 读值时，才把它和当前 signal 互相登记。
-    if (currentEffect) {
-      // effect 在回调中途自释放后，后续读值不应把它重新挂回 subscribers。
-      if (currentEffect.disposed) return value;
-      subscribers.add(currentEffect);
-      // 反向记录当前 signal 的 subscribers 集合，方便下次重跑前精准清理旧依赖。
-      currentEffect.dependencies.add(subscribers);
-    }
+    track(source);
     return value;
   }
 
   /**
-   * 仅在新旧值不同时更新闭包并通知依赖这个 signal 的 effect 重新执行。
+   * 仅在新旧值不同时更新闭包、递增版本号并触发失效传播。
    *
    * @param next 要写入的新值。
    */
   function set(next: T): void {
     // 新旧值相同时直接返回，避免无意义的重复通知（Object.is 同时正确处理 NaN 和 +0 / -0）。
     if (Object.is(value, next)) return;
-    // 先更新值，effect 重跑时调用 get() 才能读到这次写入的结果。
+    // 先更新值并递增版本号，下游 Pull 核对和读值时才能立刻看到这次写入的结果。
     value = next;
-    // 把当前订阅者登记进 pendingEffects 去重队列；若当前不在 batch 且未处于刷新中，立刻同步调用 flushEffects。
-    for (const subscriber of subscribers) {
-      if (!subscriber.disposed) {
-        pendingEffects.add(subscriber);
-      }
-    }
-    if (batchDepth === 0 && !isFlushing) {
-      flushEffects();
-    }
+    source.version += 1;
+    invalidate(source);
   }
 
   return [get, set] as const;
