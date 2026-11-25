@@ -1,0 +1,83 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "9.4 编写 Vite 插件并用编译器跑通 Todo"
+description: "实现 enforce: pre 的 nanoSolid Vite 插件，讲清流水线顺序、HMR 与资源查询过滤、source map 拼接与双路径等价验收，用编译器跑通完整 Todo 应用。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+到 [9.3](../9.3-props-events-and-hybrid/) 为止，`transformJSX` 已经能把整份 `examples/todo-app/App.tsx` 的全部原生 HTML 标签编译成直接 DOM 调用。但现在它还只是一个停留在单测里的函数，运行 `pnpm dev` 或 `pnpm test:run` 时，Vite 仍然按第 5 章的方式把一切 JSX 扔给 `jsx-runtime`。
+
+这一节我们给它套上一层轻量、严谨的 Vite 插件 `nanoSolid()`，接入根目录 `vite.config.ts`，并用双路径等价测试和真实的 Vite 构建为第九章收官。
+
+## 1. 为什么插件必须声明 `enforce: "pre"`？
+
+Vite 处理 `.tsx` 文件时，内置的转换插件（`vite:esbuild` / OXC）默认会在普通阶段接管源码，一口气完成两件事：**擦除 TypeScript 类型**，以及**按照 `tsconfig.json` 的 `jsx: "react-jsx"` 把所有 JSX 改成 `jsx()` / `jsxDEV()`**。
+
+如果我们的插件不加 `enforce: "pre"`，等 `transform(code, id)` 被调用时，源码里的 `<button>`、`<span>` 早就变成了 `jsx("button", ...)`，Babel 遍历 `JSXElement` 时什么都看不到。把 `enforce` 设为 `"pre"` 后，整条流水线变成清晰的接力赛：
+
+```mermaid
+flowchart LR
+  Raw["原始 .tsx（含 TS 类型 + 原生/组件 JSX）"] --> Pre["nanoSolid() (enforce: pre)"]
+  Pre -->|"原生标签 -> 直接 DOM + compiler-runtime import + source map"| Builtin["Vite 内置 TSX 转换（普通阶段）"]
+  Builtin -->|"擦除 TS 类型，剩余 Show / For -> jsx()，合并 source map"| Browser["浏览器 / Vitest / 生产包"]
+```
+
+这种接力协作还有两个好处：
+
+- **不需要自己实现 TypeScript 类型擦除**：`@babel/parser` 开启 `typescript` 插件读懂 `.tsx` 后，只动受支持的原生 `JSXElement`，所有类型标注原封不动留给 Vite 后续擦除；
+- **浏览器断点精准回映原文件**：只要我们在 `transform` 里返回 `{ code, map }`，Vite 会自动把我们的 `source map` 和内置转换阶段产出的 `source map` 链式合并，DevTools 里打断点依然落在你手写的 `.tsx` 行号上。
+
+## 2. 为什么文件过滤必须精确区分 `?t=...` 与 `?raw` / `?url` / `\0`？
+
+写 Vite 插件时，最容易随手写出 `if (!id.endsWith(".tsx")) return null;`。这行代码在开发模式下会踩两个大坑：
+
+1. **误杀 HMR 热更新**：Vite 开发服务器在热更新或预构建时，传给 `transform(code, id)` 的 `id` 往往带着时间戳查询串，例如 `/repo/examples/todo-app/App.tsx?t=1732500000` 或 `?import`。如果直接判断 `id.endsWith(".tsx")`，首次加载走了编译器，一改代码热更新就悄悄退回未编译路径！
+2. **误伤静态资源查询与虚拟模块**：反过来，如果只按 `?` 截断后看后缀，又会把 `App.tsx?raw`（把源码当纯文本读进来）、`App.tsx?url`、`?worker`、`?inline` 等特殊资源查询误改写；同时 Rollup / Vite 内部以 `\0` 开头的虚拟模块、以及 `node_modules`（注意兼容 POSIX `/` 与 Windows `\` 两种路径分隔符）下的第三方代码也绝不应该被我们改写。
+
+因此 `shouldTransformId(id, exclude)` 采用四步精准判定：
+
+1. 跳过以 `\0` 开头的虚拟模块与包含 `/node_modules/` 或 `\node_modules\` 的依赖路径；
+2. 去掉 `?` 后的查询串拿到真实 `filepath`，检查是否命中用户传入的 `exclude` 正则，并确认后缀是 `.tsx` 或 `.jsx`；
+3. 若存在查询串，用 `new URLSearchParams(query)` 检查是否包含 `raw`、`url`、`inline`、`worker`、`sharedworker`、`init` 任一资源键，命中则跳过，其余查询（如 `?t=...`、`?import`）正常放行；
+4. 把去掉查询串后的 `filepath` 作为 `filename` 传给 `transformJSX`，让产出的 `source map` 始终干净指向磁盘文件路径；如果 `transformJSX` 返回 `null`，插件原样返回 `null`。
+
+## 3. 接入 `vite.config.ts` 后的一石二鸟：为什么排除 `jsx-runtime.test.tsx`？
+
+本节我们在仓库根目录新建 `vite.config.ts`（同时导出公共入口 `src/vite.ts` 与 `#nano-solid/vite` 映射）：
+
+```ts
+export default defineConfig({
+  plugins: [
+    nanoSolid({
+      exclude: [/src[\\/]jsx-runtime\.test\.tsx$/],
+    }),
+  ],
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(import.meta.dirname, "index.html"),
+        todo: resolve(import.meta.dirname, "examples/todo-app/index.html"),
+      },
+    },
+  },
+});
+```
+
+Vitest 默认自动加载根目录的 `vite.config.ts`。这意味着一旦补齐插件实现：
+
+- 运行 `pnpm test:run` 时，`examples/todo-app/App.test.tsx`（6 条 Todo 端到端测试）与 `src/control-flow.test.tsx`（14 条 `<Show>` / `<For>` 测试）会**自动经过编译器运行**；
+- 而 `src/jsx-runtime.test.tsx` 被显式放进 `exclude`，专门继续覆盖第 5 章的 `jsx-runtime` 回退路径（包括 `normalizeChildren` 早于 `createElement` 属性校验等运行时自有细节），确保**编译路径与回退路径两条线都持续有测试守门**；
+- `build.rollupOptions.input` 把根目录计数器 `index.html` 与 `examples/todo-app/index.html` 一并纳入 `pnpm build` 多页生产构建，方便一次验证两个真实页面。
+
+完成后运行 `pnpm dev` 打开 `/examples/todo-app/index.html`，在浏览器 DevTools 的 Sources 面板打开 `App.tsx`，你会直接看到整份 Todo 应用已经编译成了干净的 `document.createElement`、`addEventListener` 与唯一一条 `#nano-solid/compiler-runtime` 导入。至此，`nano-solid` 框架的 MVP（响应式内核 + 所有权控制流 + JSX 编译器与 Vite 插件）正式闭环！
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/9.4 9.4-learn
+> ```
+>
+> 本节已搭建 `src/compiler/vite-plugin.ts`、`src/vite.ts` 与根目录 `vite.config.ts`，并在 `src/compiler/vite-plugin.test.ts` 与 `src/compiler/parity.test.ts` 新增 4 条 `it.skip` 测试，覆盖插件过滤规则、source map 与 `runtimeModule` 透传、编译路径与 `jsx-runtime` 路径的双路径等价性，以及用真实 Vite 打包 `examples/todo-app/App.tsx` 的端到端断言。补齐 `shouldTransformId` 与 `nanoSolid` 的 `transform` 钩子，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，确认全部 141 条测试与双页生产构建全部通过。
+
+<LessonSolution slug="9.4-vite-plugin" tag="9.4-solution" />

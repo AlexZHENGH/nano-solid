@@ -28,5 +28,12 @@
     "skipLibCheck": true
   },
   // 覆盖当前快照的源码、测试和仓库工具，供编辑器和 pnpm typecheck 检查。
-  "include": ["scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "examples/**/*.ts", "examples/**/*.tsx"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "examples/**/*.ts",
+    "examples/**/*.tsx",
+    "scripts/**/*.ts",
+    "vite.config.ts"
+  ]
 }
