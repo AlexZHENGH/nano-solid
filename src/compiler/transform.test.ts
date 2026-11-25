@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
@@ -680,29 +680,50 @@ describe("属性、事件、ref 与混合树编译", () => {
     expect(result!.code).toContain('.id = "detail"');
   });
 
-  it("能够直接编译完整的 examples/todo-app/App.tsx：所有原生 HTML 标签全部直出，仅保留 For 与 Show 组件 JSX", () => {
-    const todoSource = readFileSync(resolve(process.cwd(), "examples/todo-app/App.tsx"), "utf8");
-    const result = transformJSX(todoSource, { filename: "examples/todo-app/App.tsx" });
-    expect(result).not.toBeNull();
+  it("能够直接编译完整的 examples/todo-app 视图源码：所有原生 HTML 标签全部直出，仅保留大写组件与控制流 JSX", () => {
+    const todoDir = resolve(process.cwd(), "examples/todo-app");
+    const componentsDir = resolve(todoDir, "components");
+    const viewFiles = [
+      "examples/todo-app/App.tsx",
+      ...(existsSync(componentsDir)
+        ? readdirSync(componentsDir)
+            .filter((name) => name.endsWith(".tsx"))
+            .sort()
+            .map((name) => `examples/todo-app/components/${name}`)
+        : []),
+    ];
 
-    // 整个文件仅注入一条 compiler-runtime 导入语句。
-    const runtimeImports =
-      result!.code.match(/^import\s[\s\S]*?from\s"nano-solid\/compiler-runtime";/gm) ?? [];
-    expect(runtimeImports.length).toBe(1);
+    const allRemainingTags: string[] = [];
+    let compiledCount = 0;
 
-    // 通过 AST 检查编译产物中剩余的 JSXElement，确认所有原生 HTML 标签均已直出，仅剩控制流组件 For 与 Show。
-    const outputAst = parse(result!.code, {
-      sourceType: "module",
-      plugins: ["jsx", "typescript"],
-    });
-    const remainingTags: string[] = [];
-    traverse(outputAst, {
-      JSXOpeningElement(path) {
-        if (t.isJSXIdentifier(path.node.name)) {
-          remainingTags.push(path.node.name.name);
-        }
-      },
-    });
-    expect(remainingTags).toEqual(["For", "Show", "Show"]);
+    for (const relPath of viewFiles) {
+      const source = readFileSync(resolve(process.cwd(), relPath), "utf8");
+      const result = transformJSX(source, { filename: relPath });
+      if (!result) continue;
+      compiledCount += 1;
+
+      // 每个发生编译的文件最多只注入一条 compiler-runtime 导入语句。
+      const runtimeImports =
+        result.code.match(/^import\s[\s\S]*?from\s"nano-solid\/compiler-runtime";/gm) ?? [];
+      expect(runtimeImports.length).toBeLessThanOrEqual(1);
+
+      // 通过 AST 检查编译产物中剩余的 JSXElement，确认所有小写原生 HTML 标签均已直出。
+      const outputAst = parse(result.code, {
+        sourceType: "module",
+        plugins: ["jsx", "typescript"],
+      });
+      traverse(outputAst, {
+        JSXOpeningElement(path) {
+          if (t.isJSXIdentifier(path.node.name)) {
+            allRemainingTags.push(path.node.name.name);
+          }
+        },
+      });
+    }
+
+    expect(compiledCount).toBeGreaterThan(0);
+    expect(allRemainingTags.every((tag) => /^[A-Z]/.test(tag))).toBe(true);
+    expect(allRemainingTags).toContain("For");
+    expect(allRemainingTags).toContain("Show");
   });
 });

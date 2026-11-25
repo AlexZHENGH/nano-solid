@@ -1,0 +1,133 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "11.3 拆分 5 个纯展示组件并用 App.tsx 组装"
+description: "按状态归属拆出 5 个职责单一的纯展示组件，在 main.tsx 组合根完成存储与 Store 依赖注入，让 App.tsx 退回薄壳视图并通过全套持久化端到端测试。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+到 [11.2](../11.2-todo-store/) 为止，`storage.ts`、`adapters/local-todo-storage.ts` 和 `todo-store.ts` 都已经测试全绿，可浏览器里真正跑的 `examples/todo-app/App.tsx` 还是旧的单文件原型：它没有接入 `createTodoStore`，近 300 行 JSX 和 6 个信号全挤在一个函数里。这一课把 Store 接进视图，同时把这个大函数按状态归属拆开。
+
+先切到起始代码跑一遍测试：
+
+```sh
+git switch --detach 11.3-learn
+pnpm test:run
+```
+
+你会看到 `examples/todo-app/App.test.tsx` 里原有的 6 条交互测试仍然通过，另有 6 条持久化端到端测试被跳过。原有测试能过，是因为 `App.tsx` 暂时保留了旧实现，它虽然已经声明接收 `props.store`，却完全没用它。所以刷新页面后任务会丢失，坏数据警告条和保存失败提示也永远不会出现。被跳过的 6 条测试描述的正是这些用户可感知的行为。
+
+## 1. 谁来创建 Store：组合根
+
+最省事的接法是在 `App.tsx` 里直接写 `createTodoStore(createLocalTodoStorage())`。少传一个 prop，代价却是视图层从此和浏览器 `localStorage` 焊死：
+
+- 组件测试想注入“含坏 JSON 的存储”或“写入会抛错的存储”时，只能去 monkey-patch 全局 `window.localStorage`，测试之间还会互相污染；
+- 第 12 章换成 HTTP 后端时，必须回头改 `App.tsx`，哪怕界面一个像素都没变。
+
+更好的办法是只让一个地方知道具体用哪种存储。这个地方叫 **组合根（Composition Root）**，在我们的应用里就是 `examples/todo-app/main.tsx`：
+
+```tsx
+render(() => {
+  const storage = createLocalTodoStorage();
+  const store = createTodoStore(storage);
+  return <App store={store} />;
+}, app);
+```
+
+`App` 只接收 `store: TodoStore`，它不知道数据来自 `localStorage`、内存还是网络。测试里的 `examples/todo-app/test-support/mount-todo-app.tsx` 是第二个组合根，写法完全相同，只是允许传入内存存储：
+
+```tsx
+export function mountTodoApp(container: HTMLElement, storage?: TodoStorage): Dispose {
+  return render(() => {
+    const store = createTodoStore(storage ?? createLocalTodoStorage());
+    return <App store={store} />;
+  }, container);
+}
+```
+
+这里有个容易写错的细节：`createTodoStore(storage)` 必须放在 `render` 的回调 **里面**。回忆第 6 章的 Owner 树，`createMemo` 和 `createEffect` 在创建时会挂到“当前 Owner”下面。写在回调里，Store 的 4 个派生 memo 和自动保存 effect 都挂在 `render` 建立的根 Owner 下，调用返回的 `dispose` 时会和 DOM 一起被清理。如果写在 `render` 外面，它们没有 Owner，卸载应用后自动保存 effect 仍然活着，下一次有人改 `todos` 还会往存储里写。测试里反复挂载、卸载应用时，这类泄漏会让用例互相串数据。
+
+> [!NOTE]
+> 为什么 `App` 接收的是 `store` 而不是 `storage`？因为“怎么解析、校验、自动保存”是 Store 的职责，视图只关心“有哪些任务、能执行哪些命令”。把 `storage` 交给 `App`，等于让视图再负责一次 Store 的创建，组合根的意义就没了。
+
+## 2. 拆组件的依据：谁拥有哪份状态
+
+拆组件不是每 50 行切一刀。真正决定边界的是状态归属。旧 `App.tsx` 里的状态其实分两类：
+
+- 领域状态：任务列表 `todos`、筛选条件 `filter`、恢复警告和保存错误。它们已经搬进 `TodoStore`，由 Store 统一校验和持久化；
+- 视图局部状态：新建输入框草稿 `draft`、正在编辑哪一行 `editingId`、编辑草稿 `editDraft`、明细面板是否展开 `showCompletedDetails`。它们只影响界面，不需要持久化，刷新页面丢了也无所谓。
+
+视图局部状态不该进 Store。放进去之后，Store 的纯 Node 测试要顺带关心“哪一行在编辑”，同一个 Store 也没法同时驱动两套各自编辑不同行的界面。所以规则很简单：局部状态放在 **需要它的最小公共祖先组件** 里。按这条规则得到 5 个组件：
+
+| 组件文件                | 拥有的局部状态           | 接收的外部输入                                     | 职责                                                                       |
+| ----------------------- | ------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------- |
+| `PersistenceBanner.tsx` | 无                       | `loadWarning`、`saveError`                         | 条件展示 `#load-warning` 黄色恢复提示与 `#save-error` 红色写入失败提示     |
+| `TodoComposer.tsx`      | `draft`、输入框 ref      | `onAdd`                                            | 受控新建输入框，提交时在 `batch` 中调用 `onAdd` 并清空草稿，然后恢复焦点   |
+| `TodoFilters.tsx`       | 无                       | `filter`、`onSelect`                               | 渲染全部、未完成、已完成三个筛选按钮                                       |
+| `TodoItem.tsx`          | 无                       | `todo` getter、`isEditing`、`editDraft` 与行级回调 | 用 `<Show>` 在查看态与行内编辑态之间原地切换                               |
+| `TodoList.tsx`          | `editingId`、`editDraft` | `todos`、`onToggle`、`onUpdate`、`onRemove`        | 用 `<For>` 按 `id` 复用 `<TodoItem />`，删除正在编辑的任务时同步退出编辑态 |
+
+`showCompletedDetails` 只影响底部明细，留在 `App.tsx` 里就够了，`App` 剩下的工作就是标题、徽章和把 Store 的字段分发给子组件。
+
+为什么 `editingId` 放在 `TodoList`，而不是每个 `TodoItem` 自己维护一个 `isEditing`？因为“同一时刻最多只有一行在编辑”是 **行与行之间** 的约束。如果每行各管各的，点开第二行时第一行不知道自己该退出，只能再引入一套行间通信。把 `editingId` 放到列表这一层，互斥就是一个信号的天然结果：`editingId` 只能等于一个值。
+
+同理，删除正在编辑的那一行时，`TodoList` 需要同时做两件事：让 Store 删除任务，以及把 `editingId` 清空。这两步要包在 `batch` 里：
+
+```tsx
+const removeTodo = (id: number) => {
+  batch(() => {
+    props.onRemove(id);
+    if (editingId() === id) {
+      setEditingId(null);
+    }
+  });
+};
+```
+
+不加 `batch`，第一步执行完时会出现“任务已删除，`editingId` 却还指向它”的中间状态，依赖它的计算会白跑一轮。`saveEdit` 也一样，`onUpdate` 和 `setEditingId(null)` 合并在一次 `batch` 里，Store 的自动保存 effect 只会在批处理结束后运行一次，`localStorage` 只写一次。
+
+## 3. 细粒度响应式下的 Props 形状
+
+React 开发者第一次写这里，常会把 `TodoItemProps` 写成 `todo: Todo`。在 `nano-solid` 里这样写会出 bug。
+
+回忆第 5 章和第 7 章：**组件函数只在创建时执行一次**。`<For>` 按 `id` 复用行节点，某条任务被勾选时，`<For>` 不会重新调用 `TodoItem(nextProps)`，而是更新这一行的响应式 getter `todo()`。如果 Props 里传的是值，组件拿到的就是创建那一刻的快照，之后勾选状态、改名都不会反映到页面上。
+
+所以 `TodoItem` 里凡是会变的地方，复选框的 `checked`、`aria-label`、完成态 `class` 和任务文案，都要写成 `() => props.todo().xxx`，让每个绑定各自订阅需要的字段。`<li>` 不会被销毁重建，只有真正变化的那个属性或文本节点被更新。原有测试“勾选任务完成时复用同一个 li 节点”验证的就是这一点。
+
+`isEditing` 也是 getter：`TodoList` 给每行传 `() => editingId() === todo().id`。切换编辑行时，每行的比较都会重新求值，但只有结果真正翻转的那两行会切换 `<Show>` 分支，其余行的 DOM 纹丝不动。
+
+回调 Props 则是普通函数，比如 `onAdd: (text: string) => void`。事件回调是“被调用”而不是“被读取”的，不参与依赖追踪，没必要包一层 getter。`App` 可以直接写 `onAdd={store.addTodo}`，因为 `createTodoStore` 返回的命令都是闭包，不依赖 `this`，拆出来单独传递不会丢失上下文。
+
+> [!TIP]
+> 判断一个 prop 该不该写成 getter，只问一个问题：组件创建之后，这个值还会不会变？会变就传 getter，不会变（比如回调、常量配置）就直接传值。
+
+## 4. 拆完之后编译器做了什么
+
+拆分后，5 个组件和 `App.tsx` 里所有小写的原生标签，仍然会被第 9 章的 `nanoSolid()` Vite 插件编译成直接 DOM 调用，只有 `<PersistenceBanner />`、`<TodoList />` 这类组件标签和 `<Show>`、`<For>` 留给运行时处理。组件拆得再细，也不会多出一层虚拟 DOM 的开销。`src/compiler/transform.test.ts` 会扫描 `App.tsx` 和 `components/` 下的所有文件，断言编译产物里不再残留任何原生标签的 JSX。
+
+## 5. 6 条持久化端到端测试
+
+被跳过的测试都通过 `mountTodoApp(container, storage)` 注入内存存储，从用户视角覆盖持久化行为：
+
+- 新增和勾选后卸载再挂载，任务完整恢复；
+- 删光任务后存储里是 `[]`，重新挂载保持空列表，不回退到默认示例；
+- 恢复稀疏 ID 的历史任务后，新任务从最大 ID 的下一位开始编号；
+- 只挂载、切换筛选或输入草稿时，不写存储；
+- 存储里有损坏记录或坏 JSON 时显示 `#load-warning`，并且启动时不覆盖原数据；
+- 写入抛错时页面保留新任务并显示 `#save-error`，存储恢复后下一次修改自动保存并撤下提示。
+
+这些行为的逻辑在 11.1 和 11.2 已经由单元测试验证过，这里验证的是它们真正连到了界面上。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/11.3 11.3-learn
+> ```
+>
+> 补全 `examples/todo-app/components/` 下的 5 个组件，并把 `App.tsx` 改成用 `props.store` 组装的薄壳视图。完成后页面行为与之前一致，刷新后任务不会丢失，`App.test.tsx` 的 12 条测试全部通过。
+>
+> ```sh
+> pnpm format && pnpm check && pnpm test:run && pnpm build
+> ```
+
+<LessonSolution slug="11.3-components-and-composition" tag="11.3-solution" />

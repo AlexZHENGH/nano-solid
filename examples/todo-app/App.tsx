@@ -1,30 +1,35 @@
 import { For, Show, batch, createMemo, createSignal } from "nano-solid";
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+import { PersistenceBanner } from "./components/PersistenceBanner.tsx";
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+import { TodoComposer } from "./components/TodoComposer.tsx";
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+import { TodoFilters } from "./components/TodoFilters.tsx";
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+import { TodoList } from "./components/TodoList.tsx";
+import type { TodoStore } from "./todo-store.ts";
+import { INITIAL_TODOS, type Todo, type TodoFilter } from "./types.ts";
 
-/** 筛选条件枚举：全部、未完成或已完成。 */
-export type TodoFilter = "all" | "active" | "completed";
-
-/** 单条待办任务数据结构。 */
-export type Todo = {
-  id: number;
-  text: string;
-  completed: boolean;
+/** Todo 应用根组件的输入属性：只接收由组合根注入的 TodoStore，不直接触碰任何存储适配器。 */
+export type AppProps = {
+  /** 由入口组合根或测试辅助函数创建的 TodoStore 实例。 */
+  store: TodoStore;
 };
 
-/** 初始示例待办任务。 */
-export const INITIAL_TODOS: Todo[] = [
-  { id: 1, text: "实现 createMemo 派生缓存", completed: true },
-  { id: 2, text: "实现按 key 复用的 For 列表", completed: false },
-  { id: 3, text: "补齐表单输入与行内编辑", completed: false },
-];
-
 /**
- * Todo 示例应用根组件：组合 createSignal、createMemo、<For>、<Show> 与受控表单，完成新增、勾选、筛选与行内编辑。
+ * Todo 示例应用根视图：把领域状态与命令分发给各纯视图子组件，自身仅保留底部明细面板的折叠开关。
  *
+ * @param props 注入的 TodoStore。
  * @returns 完整 Todo 卡片的原生 DOM 节点。
  */
-export function App(): Node {
+export function App(
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  props: AppProps,
+): Node {
+  // 用注入的 props.store 驱动视图，把各区块交给 PersistenceBanner、TodoComposer、TodoFilters、TodoList 渲染，自身只保留底部明细的折叠开关。
+  // TODO: 删除下方临时的单文件状态实现，改用 props.store 与四个子组件组装视图
   // 1. 定义任务列表、当前筛选条件、新建输入框草稿与行内编辑状态。
-  const [todos, setTodos] = createSignal<Todo[]>(INITIAL_TODOS);
+  const [todos, setTodos] = createSignal<Todo[]>(INITIAL_TODOS.map((todo) => ({ ...todo })));
   const [filter, setFilter] = createSignal<TodoFilter>("all");
   const [draft, setDraft] = createSignal("");
   const [editingId, setEditingId] = createSignal<number | null>(null);

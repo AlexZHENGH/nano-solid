@@ -295,15 +295,21 @@ describe("package.json 条件导出、仓内源码条件与 Todo 迁移", () => 
   });
 
   it("examples/todo-app 已全面迁移到正式包名 nano-solid，不再残留 #nano-solid", () => {
-    const todoFiles = [
-      "examples/todo-app/App.tsx",
-      "examples/todo-app/main.tsx",
-      "examples/todo-app/App.test.tsx",
-    ];
+    // 递归扫描 Todo 应用的全部 TS/TSX 源码，随着组件拆分新增的文件也会自动纳入检查。
+    const todoDir = resolve(ROOT_DIR, "examples/todo-app");
+    const todoFiles = readdirSync(todoDir, { recursive: true, encoding: "utf8" }).filter(
+      (relPath) => /\.tsx?$/.test(relPath),
+    );
+    expect(todoFiles.length).toBeGreaterThan(0);
     for (const relPath of todoFiles) {
-      const content = readFileSync(resolve(ROOT_DIR, relPath), "utf8");
-      expect(content).toContain('from "nano-solid"');
-      expect(content).not.toContain("#nano-solid");
+      const content = readFileSync(join(todoDir, relPath), "utf8");
+      expect(content, relPath).not.toContain("#nano-solid");
+    }
+
+    // 应用视图入口与组装入口必须通过正式包名导入框架。
+    for (const relPath of ["App.tsx", "main.tsx"]) {
+      const content = readFileSync(join(todoDir, relPath), "utf8");
+      expect(content, relPath).toContain('from "nano-solid"');
     }
   });
 });

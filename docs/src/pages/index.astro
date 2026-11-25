@@ -48,6 +48,7 @@ import { frontmatter as externalConsumerVerify } from "./lessons/10.4-external-c
 import { frontmatter as persistenceAndArchitecture } from "./lessons/11.0-persistence-and-architecture.mdx";
 import { frontmatter as storageValidation } from "./lessons/11.1-storage-and-validation.mdx";
 import { frontmatter as todoStoreLesson } from "./lessons/11.2-todo-store.mdx";
+import { frontmatter as componentsComposition } from "./lessons/11.3-components-and-composition.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -100,6 +101,7 @@ const externalConsumerVerifyUrl = `${baseUrl}/lessons/10.4-external-consumer-ver
 const persistenceAndArchitectureUrl = `${baseUrl}/lessons/11.0-persistence-and-architecture/`;
 const storageValidationUrl = `${baseUrl}/lessons/11.1-storage-and-validation/`;
 const todoStoreLessonUrl = `${baseUrl}/lessons/11.2-todo-store/`;
+const componentsCompositionUrl = `${baseUrl}/lessons/11.3-components-and-composition/`;
 ---
 
 <BookLayout
@@ -215,5 +217,6 @@ const todoStoreLessonUrl = `${baseUrl}/lessons/11.2-todo-store/`;
   <ul class="course-lessons">
     <li><a href={storageValidationUrl}>{storageValidation.title}</a></li>
     <li><a href={todoStoreLessonUrl}>{todoStoreLesson.title}</a></li>
+    <li><a href={componentsCompositionUrl}>{componentsComposition.title}</a></li>
   </ul>
 </BookLayout>
