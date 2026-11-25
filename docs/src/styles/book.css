@@ -417,3 +417,47 @@ th {
   background: #ffffff;
   color: var(--ns-accent-hover);
 }
+
+/* 第九章 JSX 编译前后对比演示样式（仅文档站使用）。 */
+.compiler-demo-panel {
+  margin-top: 0.85rem;
+}
+.compiler-demo-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ns-muted);
+}
+.compiler-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.85rem;
+}
+@media (max-width: 720px) {
+  .compiler-demo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.compiler-demo-pre {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--ns-radius-md);
+  background: #24292e;
+  color: #e1e4e8;
+  font: 0.79rem/1.55 var(--ns-font-mono);
+  overflow-x: auto;
+  white-space: pre;
+}
+.compiler-demo-pre-compiled {
+  border: 1px solid var(--ns-accent);
+}
+.compiler-demo-caption {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ns-muted);
+}
