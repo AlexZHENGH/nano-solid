@@ -81,7 +81,6 @@ const pendingMemos = new Set<Memo>();
  * @param source 上游数据源节点。
  * @returns 是否为 Memo。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function isMemo(source: Source): source is Memo {
   return "kind" in source && source.kind === "memo";
 }
@@ -103,13 +102,19 @@ function track(source: Source): void {
  *
  * @param computation 收到上游“可能变化”信号的下游计算节点。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-function markCheck(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  computation: Computation,
-): void {
+function markCheck(computation: Computation): void {
   // 已释放直接跳过；effect 加入 pendingEffects；仅当 memo 当前为 clean 时置为 check、入队 pendingMemos 并递归通知其下游。
-  // TODO: 实现 markCheck 的三态传播逻辑。
+  if (computation.disposed) return;
+  if (computation.kind === "effect") {
+    pendingEffects.add(computation);
+    return;
+  }
+  if (computation.state !== "clean") return;
+  computation.state = "check";
+  pendingMemos.add(computation);
+  for (const child of computation.subscribers) {
+    markCheck(child);
+  }
 }
 
 /**
@@ -119,11 +124,16 @@ function markCheck(
  */
 function markDirty(computation: Computation): void {
   // 已释放直接跳过；effect 加入 pendingEffects；memo 若还不是 dirty 则置为 dirty 并对其下游调用 markCheck，同时入队 pendingMemos。
-  // TODO: 升级为三态 Push 标脏（置为 dirty、递归 markCheck 下游、入队 pendingMemos）。
   if (computation.disposed) return;
   if (computation.kind === "effect") {
     pendingEffects.add(computation);
     return;
+  }
+  if (computation.state !== "dirty") {
+    computation.state = "dirty";
+    for (const child of computation.subscribers) {
+      markCheck(child);
+    }
   }
   pendingMemos.add(computation);
 }
@@ -149,14 +159,17 @@ function invalidate(source: Source): void {
  * @param computation 待确认是否真的需要重算的 memo 或 effect。
  * @returns 是否有至少一个上游依赖版本号发生变化。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-function dependenciesChanged(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  computation: Computation,
-): boolean {
+function dependenciesChanged(computation: Computation): boolean {
   // 遍历 computation.dependencies，若上游是 Memo 先调用 updateMemo(source)，一旦 source.version !== observedVersion 立刻短路返回 true。
-  // TODO: 实现按读取顺序短路的上游版本核对逻辑。
-  return true;
+  for (const [source, observedVersion] of Array.from(computation.dependencies)) {
+    if (isMemo(source)) {
+      updateMemo(source);
+    }
+    if (source.version !== observedVersion) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -166,10 +179,15 @@ function dependenciesChanged(
  */
 function updateMemo(memo: Memo): void {
   // 已释放直接返回缓存；未初始化或 dirty 直接调用 runComputation(memo)；check 时仅在 dependenciesChanged(memo) 为真时重算，否则标回 clean。
-  // TODO: 补齐 dirty 与 check 状态下的按需拉取与重算逻辑。
   if (memo.disposed) return;
-  if (!memo.initialized) {
+  if (!memo.initialized || memo.state === "dirty") {
     runComputation(memo);
+  } else if (memo.state === "check") {
+    if (dependenciesChanged(memo)) {
+      runComputation(memo);
+    } else {
+      memo.state = "clean";
+    }
   }
 }
 
@@ -178,31 +196,25 @@ function updateMemo(memo: Memo): void {
  */
 function flushEffects(): void {
   // 已在刷新中则直接返回；循环先消费 pendingEffects（经 dependenciesChanged 校验），再消费 pendingMemos（经 updateMemo 补刷）；异常时清空两队列并复原 isFlushing。
-  // TODO: 改为先消费 pendingEffects（经 dependenciesChanged 校验）再消费 pendingMemos（经 updateMemo 补刷）。
   if (isFlushing) return;
   isFlushing = true;
   try {
-    while (pendingMemos.size > 0 || pendingEffects.size > 0) {
-      if (pendingMemos.size > 0) {
-        const memos = Array.from(pendingMemos);
-        pendingMemos.clear();
-        for (const memo of memos) {
-          if (memo.disposed) continue;
-          const prevVersion = memo.version;
-          runComputation(memo);
-          if (memo.version !== prevVersion) {
-            for (const subscriber of memo.subscribers) {
-              markDirty(subscriber);
-            }
+    while (pendingEffects.size > 0 || pendingMemos.size > 0) {
+      if (pendingEffects.size > 0) {
+        const effects = Array.from(pendingEffects);
+        pendingEffects.clear();
+        for (const effect of effects) {
+          if (!effect.disposed && dependenciesChanged(effect)) {
+            runComputation(effect);
           }
         }
         continue;
       }
 
-      const queue = Array.from(pendingEffects);
-      pendingEffects.clear();
-      for (const effect of queue) {
-        runComputation(effect);
+      const memos = Array.from(pendingMemos);
+      pendingMemos.clear();
+      for (const memo of memos) {
+        updateMemo(memo);
       }
     }
   } catch (error) {
@@ -386,8 +398,13 @@ export function onCleanup(cleanup: Dispose): void {
  */
 export function untrack<T>(fn: () => T): T {
   // 只暂停依赖登记，让当前计算和所有权保持不变，最后恢复追踪开关。
-  // TODO: 保存 tracking，设为 false 后调用 fn，再通过 finally 恢复。
-  return fn();
+  const previousTracking = tracking;
+  tracking = false;
+  try {
+    return fn();
+  } finally {
+    tracking = previousTracking;
+  }
 }
 
 /**

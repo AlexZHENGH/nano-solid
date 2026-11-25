@@ -841,7 +841,7 @@ it("batch 刷新期间某个 effect 抛错后会清空残余队列并恢复后�
   expect(seenOther).toEqual(["a", "b"]);
 });
 
-it.skip("菱形依赖（total 先于 remaining 注册）无毛刺：新增未完成任务时 completed 只算一次且不误唤醒下游", () => {
+it("菱形依赖（total 先于 remaining 注册）无毛刺：新增未完成任务时 completed 只算一次且不误唤醒下游", () => {
   const [todos, setTodos] = createSignal([
     { id: 1, completed: true },
     { id: 2, completed: false },
@@ -878,7 +878,7 @@ it.skip("菱形依赖（total 先于 remaining 注册）无毛刺：新增未完
   expect(seenCompleted).toEqual([1, 2]);
 });
 
-it.skip("菱形依赖（remaining 先于 total 注册）同样无毛刺且不依赖注册顺序", () => {
+it("菱形依赖（remaining 先于 total 注册）同样无毛刺且不依赖注册顺序", () => {
   const [todos, setTodos] = createSignal([
     { id: 1, completed: true },
     { id: 2, completed: false },
@@ -902,7 +902,7 @@ it.skip("菱形依赖（remaining 先于 total 注册）同样无毛刺且不依
   expect(seenCompleted).toEqual([1]);
 });
 
-it.skip("同一个 effect 同时读取源 signal 和派生 memo 时，单次写入只重跑一次且看到一致快照", () => {
+it("同一个 effect 同时读取源 signal 和派生 memo 时，单次写入只重跑一次且看到一致快照", () => {
   const [count, setCount] = createSignal(2);
   const doubled = createMemo(() => count() * 2);
   const seen: Array<[number, number]> = [];
@@ -920,7 +920,7 @@ it.skip("同一个 effect 同时读取源 signal 和派生 memo 时，单次写�
   ]);
 });
 
-it.skip("在 batch 中途读取 createMemo 会按需刷新到最新一致值，同时下游 effect 仍等到 batch 结束", () => {
+it("在 batch 中途读取 createMemo 会按需刷新到最新一致值，同时下游 effect 仍等到 batch 结束", () => {
   const [count, setCount] = createSignal(2);
   const computeDoubled = vi.fn(() => count() * 2);
   const doubled = createMemo(computeDoubled);
@@ -947,7 +947,7 @@ it.skip("在 batch 中途读取 createMemo 会按需刷新到最新一致值，�
   expect(seen).toEqual([4, 20]);
 });
 
-it.skip("batch 同时关闭分支并置空数据时，先跑外层 effect 释放死分支，不误跑已退出的孤儿 memo", () => {
+it("batch 同时关闭分支并置空数据时，先跑外层 effect 释放死分支，不误跑已退出的孤儿 memo", () => {
   const [show, setShow] = createSignal(true);
   const [user, setUser] = createSignal<{ name: string } | null>({ name: "Ada" });
   const seenNames: string[] = [];
@@ -989,7 +989,7 @@ it.skip("batch 同时关闭分支并置空数据时，先跑外层 effect 释放
   expect(computeName).toHaveBeenCalledTimes(1);
 });
 
-it.skip("untrack 暂时屏蔽依赖追踪但保留当前 Owner，内部仍可读到最新值并随父作用域释放", () => {
+it("untrack 暂时屏蔽依赖追踪但保留当前 Owner，内部仍可读到最新值并随父作用域释放", () => {
   const [tracked, setTracked] = createSignal(1);
   const [ignored, setIgnored] = createSignal(10);
   const seen: Array<[number, number]> = [];
@@ -1070,7 +1070,7 @@ it("初始化失败时完成回滚并重抛原始异常", () => {
   expect(cleanup).toHaveBeenCalledTimes(2);
 });
 
-it.skip("untrack 屏蔽读取追踪，写入等当前 effect 结束再刷新", () => {
+it("untrack 屏蔽读取追踪，写入等当前 effect 结束再刷新", () => {
   const [count, setCount] = createSignal(0);
   const [ignored, setIgnored] = createSignal(0);
   const seen: number[] = [];

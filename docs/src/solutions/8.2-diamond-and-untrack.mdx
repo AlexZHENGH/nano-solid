@@ -1,0 +1,118 @@
+先把 `src/reactive.ts` 里的 Push 阶段补齐：`markDirty` 把直接订阅的 memo 标为 `"dirty"` 并把更下游节点交给 `markCheck` 标为 `"check"`，叶子 effect 统一放进 `pendingEffects`，不再在写入途中立刻求值：
+
+```ts
+function markCheck(computation: Computation): void {
+  // 已释放直接跳过；effect 加入 pendingEffects；仅当 memo 当前为 clean 时置为 check、入队 pendingMemos 并递归通知其下游。
+  if (computation.disposed) return;
+  if (computation.kind === "effect") {
+    pendingEffects.add(computation);
+    return;
+  }
+  if (computation.state !== "clean") return;
+  computation.state = "check";
+  pendingMemos.add(computation);
+  for (const child of computation.subscribers) {
+    markCheck(child);
+  }
+}
+
+function markDirty(computation: Computation): void {
+  // 已释放直接跳过；effect 加入 pendingEffects；memo 若还不是 dirty 则置为 dirty 并对其下游调用 markCheck，同时入队 pendingMemos。
+  if (computation.disposed) return;
+  if (computation.kind === "effect") {
+    pendingEffects.add(computation);
+    return;
+  }
+  if (computation.state !== "dirty") {
+    computation.state = "dirty";
+    for (const child of computation.subscribers) {
+      markCheck(child);
+    }
+  }
+  pendingMemos.add(computation);
+}
+```
+
+接着实现 Pull 阶段的 `dependenciesChanged` 与 `updateMemo`：按依赖读取顺序逐个核对版本号，遇到上游 memo 先递归调用 `updateMemo` 刷新；只要任意依赖版本变了就立刻返回 `true` 短路；如果 `check` 状态下的所有上游版本都没变，直接把 memo 复位为 `"clean"` 跳过重算：
+
+```ts
+function dependenciesChanged(computation: Computation): boolean {
+  // 遍历 computation.dependencies，若上游是 Memo 先调用 updateMemo(source)，一旦 source.version !== observedVersion 立刻短路返回 true。
+  for (const [source, observedVersion] of Array.from(computation.dependencies)) {
+    if (isMemo(source)) {
+      updateMemo(source);
+    }
+    if (source.version !== observedVersion) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function updateMemo(memo: Memo): void {
+  // 已释放直接返回缓存；未初始化或 dirty 直接调用 runComputation(memo)；check 时仅在 dependenciesChanged(memo) 为真时重算，否则标回 clean。
+  if (memo.disposed) return;
+  if (!memo.initialized || memo.state === "dirty") {
+    runComputation(memo);
+  } else if (memo.state === "check") {
+    if (dependenciesChanged(memo)) {
+      runComputation(memo);
+    } else {
+      memo.state = "clean";
+    }
+  }
+}
+```
+
+然后把 `flushEffects()` 调整为先消费 `pendingEffects`（经 `dependenciesChanged(effect)` 核对上游版本，顺带让 `<Show>` 等外层控制流先销毁退出分支），再消费 `pendingMemos` 补刷剩余无人订阅的独立急切 memo：
+
+```ts
+function flushEffects(): void {
+  // 已在刷新中则直接返回；循环先消费 pendingEffects（经 dependenciesChanged 校验），再消费 pendingMemos（经 updateMemo 补刷）；异常时清空两队列并复原 isFlushing。
+  if (isFlushing) return;
+  isFlushing = true;
+  try {
+    while (pendingEffects.size > 0 || pendingMemos.size > 0) {
+      if (pendingEffects.size > 0) {
+        const effects = Array.from(pendingEffects);
+        pendingEffects.clear();
+        for (const effect of effects) {
+          if (!effect.disposed && dependenciesChanged(effect)) {
+            runComputation(effect);
+          }
+        }
+        continue;
+      }
+
+      const memos = Array.from(pendingMemos);
+      pendingMemos.clear();
+      for (const memo of memos) {
+        updateMemo(memo);
+      }
+    }
+  } catch (error) {
+    pendingEffects.clear();
+    pendingMemos.clear();
+    throw error;
+  } finally {
+    isFlushing = false;
+  }
+}
+```
+
+最后补上 `untrack`。保存追踪开关，暂时关闭登记，退出时恢复。`currentComputation` 继续代表正在执行的计算，写入仍由它的退出时机决定。
+
+```ts
+export function untrack<T>(fn: () => T): T {
+  // 只暂停依赖登记，让当前计算和所有权保持不变，最后恢复追踪开关。
+  const previousTracking = tracking;
+  tracking = false;
+  try {
+    return fn();
+  } finally {
+    tracking = previousTracking;
+  }
+}
+```
+
+删除起手代码里的 `oxlint-disable-next-line` 注释，去掉 `src/reactive.test.ts` 中 7 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run`，全部 105 条测试都会通过。
