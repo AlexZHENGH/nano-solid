@@ -7,7 +7,36 @@ import * as t from "@babel/types";
 const DEFAULT_RUNTIME_MODULE = "#nano-solid/compiler-runtime";
 
 /** 编译器当前按需导入的运行时辅助函数名集合。 */
-type RuntimeHelper = "createReactiveText" | "appendChildren";
+type RuntimeHelper = "createReactiveText" | "appendChildren" | "bindProperty" | "onCleanup";
+
+/** 原生元素编译器支持的 JSX 事件属性到 DOM 原生事件名的映射。 */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+const EVENT_NAME_MAP: Record<string, string> = {
+  onClick: "click",
+  onInput: "input",
+  onChange: "change",
+};
+
+/** 原生元素编译器支持的全部已知属性白名单；遇到 spread 或未列出的属性时安全回退给 jsx-runtime。 */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+const SUPPORTED_ATTRS = new Set([
+  "id",
+  "type",
+  "class",
+  "aria-label",
+  "placeholder",
+  "disabled",
+  "value",
+  "checked",
+  "onClick",
+  "onInput",
+  "onChange",
+  "ref",
+]);
+
+/** 允许使用 JSX 布尔简写（如 <button disabled />）的属性集合。 */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+const BOOLEAN_SHORTHAND_ATTRS = new Set(["disabled", "checked"]);
 
 /** 递归生成 DOM 语句时共享的作用域与按需导入登记器。 */
 type EmitContext = {
@@ -66,8 +95,58 @@ function isReactiveTextGetter(expr: t.Expression): boolean {
 }
 
 /**
+ * 若 JSX 属性值是编译期确定的字符串字面量（如 class="ns-btn" 或 class={"ns-btn"}），解包返回该字符串；否则返回 null。
+ *
+ * @param value JSXAttribute 的 value 字段。
+ * @returns 静态字符串内容或 null。
+ */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+function unwrapStaticString(value: t.JSXAttribute["value"]): string | null {
+  if (t.isStringLiteral(value)) return value.value;
+  if (t.isJSXExpressionContainer(value) && t.isStringLiteral(value.expression)) {
+    return value.expression.value;
+  }
+  return null;
+}
+
+/**
+ * 若 JSX 属性值是编译期确定的布尔字面量（如 <button disabled /> 或 disabled={false}），解包返回该布尔值；否则返回 null。
+ *
+ * @param value JSXAttribute 的 value 字段。
+ * @returns 静态布尔值或 null。
+ */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+function unwrapStaticBoolean(value: t.JSXAttribute["value"]): boolean | null {
+  if (value === null || value === undefined) return true;
+  if (t.isJSXExpressionContainer(value) && t.isBooleanLiteral(value.expression)) {
+    return value.expression.value;
+  }
+  return null;
+}
+
+/**
+ * 将 JSXAttribute 的值统一提取为 JavaScript 表达式节点，供 _bindProperty、事件绑定或 ref 求值使用。
+ *
+ * @param value JSXAttribute 的 value 字段。
+ * @returns 对应的 JS 表达式节点。
+ */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+function attributeValueToExpression(value: t.JSXAttribute["value"]): t.Expression {
+  if (value === null || value === undefined) {
+    return t.booleanLiteral(true);
+  }
+  if (t.isStringLiteral(value)) {
+    return t.stringLiteral(value.value);
+  }
+  if (t.isJSXExpressionContainer(value) && t.isExpression(value.expression)) {
+    return value.expression;
+  }
+  throw new Error("Unsupported JSX attribute value");
+}
+
+/**
  * 判断一个 JSXElement 当前是否可以安全编译为直接 DOM 调用：
- * 当前支持无属性的小写原生 HTML 标签，其子节点允许文本、表达式容器以及任意子元素（未支持的子元素通过 appendChildren 交由运行时并在后续遍历中继续编译）。
+ * 支持带已知静态/响应式属性、事件与 ref 的小写原生标签（不含 spread、未知属性或重复属性），以及任意文本/表达式/子元素。
  *
  * @param element 待检查的 JSXElement AST 节点。
  * @returns 是否支持把该原生元素编译为直接 DOM 调用。
@@ -76,12 +155,45 @@ function canCompileElement(element: t.JSXElement): boolean {
   const opening = element.openingElement;
   if (!t.isJSXIdentifier(opening.name)) return false;
   if (!/^[a-z]/.test(opening.name.name)) return false;
+
+  // 校验属性列表：只接受 SUPPORTED_ATTRS 中的非重复普通 JSXAttribute（排除 spread、未知属性、非法布尔简写与空表达式）。
+  // TODO: 放开对受支持属性、事件与 ref 的编译校验
   if (opening.attributes.length > 0) return false;
 
   // 允许 JSXText、JSXExpressionContainer 以及任意 JSXElement 子节点（排除 JSXFragment 与 JSXSpreadChild）。
   return element.children.every(
     (child) => t.isJSXText(child) || t.isJSXElement(child) || t.isJSXExpressionContainer(child),
   );
+}
+
+/**
+ * 按源码顺序把元素上的全部受支持属性与事件编译为直接 DOM 语句或辅助调用，并记录延迟到子节点挂载后再触发的 ref 变量名。
+ *
+ * @param tagName 原生 HTML 标签名（用于静态校验 input/button 专属属性）。
+ * @param attributes JSX 开始标签上的属性列表。
+ * @param elId 当前元素的局部变量标识符。
+ * @param context 包含作用域与按需导入登记器的编译上下文。
+ * @param statements 用于收集属性与事件绑定语句的数组。
+ * @param afterChildren 存放必须等子节点挂载后执行的属性绑定。
+ * @returns 若存在 ref 属性则返回已求值的临时变量标识符，否则返回 null。
+ */
+function emitAttributes(
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  tagName: string,
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  attributes: Array<t.JSXAttribute | t.JSXSpreadAttribute>,
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  elId: t.Identifier,
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  context: EmitContext,
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  statements: t.Statement[],
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  afterChildren: t.Statement[],
+): t.Identifier | null {
+  // 静态属性直出 DOM 赋值/setAttribute；动态或需标签校验属性走 _bindProperty；事件先存临时变量 _h 再 addEventListener + _onCleanup；ref 先求值存 _ref 并延后调用。
+  // TODO: 实现静态属性直出、_bindProperty 动态属性、事件绑定与 ref 暂存。select 的 value 表达式先求值，绑定语句留在 afterChildren
+  return null;
 }
 
 /**
@@ -102,15 +214,28 @@ function emitElement(
     throw new Error("Unsupported JSX element tag");
   }
 
+  const tagName = opening.name.name;
   const elId = context.scope.generateUidIdentifier("el");
   const createElCall = t.callExpression(
     t.memberExpression(t.identifier("document"), t.identifier("createElement")),
-    [t.stringLiteral(opening.name.name)],
+    [t.stringLiteral(tagName)],
   );
   createElCall.loc = opening.loc ?? null;
 
   statements.push(t.variableDeclaration("const", [t.variableDeclarator(elId, createElCall)]));
 
+  // 1. 先按源码顺序编译属性、事件并暂存 ref 表达式。
+  const afterChildren: t.Statement[] = [];
+  const refId = emitAttributes(
+    tagName,
+    opening.attributes,
+    elId,
+    context,
+    statements,
+    afterChildren,
+  );
+
+  // 2. 再依次挂载文本、响应式函数、动态表达式与子元素。
   for (const child of element.children) {
     if (t.isJSXText(child)) {
       const text = normalizeJSXText(child.value);
@@ -193,6 +318,20 @@ function emitElement(
         );
       }
     }
+  }
+
+  // 3. 所有属性、事件与子节点准备就绪后再调用 ref 回调，与 dom.ts 的 createElement 时机保持一致。
+  statements.push(...afterChildren);
+
+  if (refId) {
+    statements.push(
+      t.ifStatement(
+        t.cloneNode(refId, true),
+        t.expressionStatement(
+          t.callExpression(t.cloneNode(refId, true), [t.cloneNode(elId, true)]),
+        ),
+      ),
+    );
   }
 
   return elId;

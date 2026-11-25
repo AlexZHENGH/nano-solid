@@ -32,5 +32,5 @@ flowchart LR
 
 - **[9.1 从 JSX 到直接 DOM 调用](../9.1-static-jsx-compiler/)**：引入 Babel 8.x（`@babel/parser` / `traverse` / `generator` / `types`），实现 `transformJSX(source, options?)`，先编译静态小写原生标签、静态文本（对齐 JSX 空白规则）与嵌套结构，组件与未支持写法保留 JSX 交由运行时兜底。
 - **[9.2 编译子节点与按需注入辅助函数](../9.2-children-and-runtime/)**：新建 `src/compiler-runtime.ts`，把确定的函数子节点 `{() => ...}` 编译为 `createReactiveText`，把不确定类型的表达式交给 `appendChildren` 复用 `normalizeChildren`，并用 `generateUidIdentifier` 按需单次注入无命名冲突的 `import`。
-- **9.3 编译属性、事件、`ref` 与混合树**：把静态属性直出为原生赋值或 `setAttribute`，动态属性、受控表单（`value`、`checked`、`disabled`、`aria-label`）和事件（`onClick` / `onInput` / `onChange` + `onCleanup`）按既有顺序绑定并在抛错时沿 `Owner` 回滚，同时编译 `<Show>` / `<For>` 懒工厂内部的原生标签。
+- **[9.3 编译属性、事件、`ref` 与混合树](../9.3-props-events-and-hybrid/)**：把静态属性直出为原生赋值或 `setAttribute`，动态属性、受控表单（`value`、`checked`、`disabled`、`aria-label`）和事件（`onClick` / `onInput` / `onChange` + `onCleanup`）按既有顺序绑定并在抛错时沿 `Owner` 回滚，同时编译 `<Show>` / `<For>` 懒工厂内部的原生标签。
 - **9.4 编写 Vite 插件并用编译器跑通 Todo**：实现 `nanoSolid()` Vite 插件（`enforce: "pre"`、过滤资源查询、生成 source map），接入根目录 `vite.config.ts` 并用同一套 Todo 应用与等价性测试做双路径端到端验收。

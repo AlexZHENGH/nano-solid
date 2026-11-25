@@ -1,5 +1,13 @@
-import { createReactiveText as createDomReactiveText } from "./dom.ts";
+import {
+  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+  applyElementProperty,
+  createReactiveText as createDomReactiveText,
+  type BindablePropName,
+} from "./dom.ts";
 import { normalizeChildren, type JSXChild } from "./jsx-runtime.ts";
+
+// 直接复用响应式内核的 onCleanup，供编译器生成事件监听的成对解绑代码。
+export { onCleanup } from "./reactive.ts";
 
 /**
  * 供编译器产出的响应式文本辅助函数：兼容 string 与 number 返回值，与 jsx-runtime 的 normalizeChildren 保持一致。
@@ -23,4 +31,18 @@ export function appendChildren(parent: Node, child: JSXChild): void {
   for (const node of normalizeChildren(child)) {
     parent.appendChild(node);
   }
+}
+
+/**
+ * 供编译器产出的动态与需校验属性绑定辅助函数：直接复用 dom.ts 的 applyElementProperty，保持标签校验、光标保护与响应式追踪完全一致。
+ *
+ * @param element 目标原生 HTML 元素。
+ * @param prop 属性名。
+ * @param value 静态值、响应式 getter 或 undefined。
+ */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+export function bindProperty(element: HTMLElement, prop: BindablePropName, value: unknown): void {
+  // 直接委托给 dom.ts 的 applyElementProperty，避免编译期与运行时维护两套绑定逻辑。
+  // TODO: 实现 bindProperty
+  throw new Error("TODO: 实现 compiler-runtime 的 bindProperty");
 }

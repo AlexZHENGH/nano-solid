@@ -38,6 +38,7 @@ import { frontmatter as lazyMemo } from "./lessons/8.4-lazy-memo.mdx";
 import { frontmatter as jsxCompiler } from "./lessons/9.0-jsx-compiler.mdx";
 import { frontmatter as staticJsxCompiler } from "./lessons/9.1-static-jsx-compiler.mdx";
 import { frontmatter as childrenAndRuntime } from "./lessons/9.2-children-and-runtime.mdx";
+import { frontmatter as propsEventsHybrid } from "./lessons/9.3-props-events-and-hybrid.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -80,6 +81,7 @@ const lazyMemoUrl = `${baseUrl}/lessons/8.4-lazy-memo/`;
 const jsxCompilerUrl = `${baseUrl}/lessons/9.0-jsx-compiler/`;
 const staticJsxCompilerUrl = `${baseUrl}/lessons/9.1-static-jsx-compiler/`;
 const childrenAndRuntimeUrl = `${baseUrl}/lessons/9.2-children-and-runtime/`;
+const propsEventsHybridUrl = `${baseUrl}/lessons/9.3-props-events-and-hybrid/`;
 ---
 
 <BookLayout
@@ -177,5 +179,6 @@ const childrenAndRuntimeUrl = `${baseUrl}/lessons/9.2-children-and-runtime/`;
   <ul class="course-lessons">
     <li><a href={staticJsxCompilerUrl}>{staticJsxCompiler.title}</a></li>
     <li><a href={childrenAndRuntimeUrl}>{childrenAndRuntime.title}</a></li>
+    <li><a href={propsEventsHybridUrl}>{propsEventsHybrid.title}</a></li>
   </ul>
 </BookLayout>

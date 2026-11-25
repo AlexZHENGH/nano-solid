@@ -49,6 +49,17 @@ export function createReactiveText(getValue: () => string): Text {
   return node;
 }
 
+/** 支持通过编译期或运行时统一绑定的原生元素属性名。 */
+export type BindablePropName =
+  | "id"
+  | "type"
+  | "class"
+  | "aria-label"
+  | "placeholder"
+  | "disabled"
+  | "value"
+  | "checked";
+
 /**
  * 统一绑定静态或响应式属性：静态值立即写入，函数 getter 交给 createEffect 追踪并自动归属当前 Owner。
  *
@@ -64,6 +75,83 @@ function bindProperty<T>(value: T | (() => T), apply: (next: T) => void): void {
   }
 
   apply(value);
+}
+
+/**
+ * 按原生 DOM 语义应用单个静态或响应式属性，统一承担 undefined 忽略、标签类型校验、光标保护与响应式追踪；
+ * 运行时 createElement 与编译期 compiler-runtime 共享此函数，保证两条路径行为 100% 一致。
+ *
+ * @param element 目标原生 HTML 元素。
+ * @param prop 属性名。
+ * @param value 静态属性值、响应式 getter 或 undefined。
+ */
+export function applyElementProperty(
+  element: HTMLElement,
+  prop: BindablePropName,
+  value: unknown,
+): void {
+  if (value === undefined) return;
+
+  switch (prop) {
+    case "id":
+      element.id = value as string;
+      return;
+    case "type":
+      element.setAttribute("type", value as string);
+      return;
+    case "class":
+      bindProperty(value as string | (() => string), (next) => {
+        element.className = next;
+      });
+      return;
+    case "aria-label":
+      bindProperty(value as string | (() => string), (next) => {
+        element.setAttribute("aria-label", next);
+      });
+      return;
+    case "placeholder":
+      // placeholder 仅对输入框有效，静态写入原生 DOM 属性。
+      if (!(element instanceof HTMLInputElement)) {
+        throw new Error(
+          `The "placeholder" prop is not supported on <${element.tagName.toLowerCase()}>`,
+        );
+      }
+      element.placeholder = value as string;
+      return;
+    case "disabled":
+      // 按原生属性类型检查，输入框、按钮等拥有布尔 disabled 的元素都可以绑定。
+      if (!("disabled" in element) || typeof element.disabled !== "boolean") {
+        throw new Error(
+          `The "disabled" prop is not supported on <${element.tagName.toLowerCase()}>`,
+        );
+      }
+      bindProperty(value as boolean | (() => boolean), (next) => {
+        element.disabled = next;
+      });
+      return;
+    case "value":
+      // 只处理字符串 value，并跳过同值写入以保护输入框光标。
+      if (!("value" in element) || typeof element.value !== "string") {
+        throw new Error(`The "value" prop is not supported on <${element.tagName.toLowerCase()}>`);
+      }
+      bindProperty(value as string | (() => string), (next) => {
+        if (element.value !== next) {
+          element.value = next;
+        }
+      });
+      return;
+    case "checked":
+      // 仅输入框支持 checked 属性，直接写入布尔属性 element.checked 以支持 true / false 双向切换。
+      if (!(element instanceof HTMLInputElement)) {
+        throw new Error(
+          `The "checked" prop is not supported on <${element.tagName.toLowerCase()}>`,
+        );
+      }
+      bindProperty(value as boolean | (() => boolean), (next) => {
+        element.checked = next;
+      });
+      return;
+  }
 }
 
 /**
@@ -83,29 +171,11 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
   // 宽化为 HTMLElement，使 addEventListener("click", ...) 命中 MouseEvent 重载。
   const element: HTMLElement = node;
 
-  if (props.id !== undefined) {
-    element.id = props.id;
-  }
-  if (props.type !== undefined) {
-    element.setAttribute("type", props.type);
-  }
-  if (props.class !== undefined) {
-    bindProperty(props.class, (value) => {
-      element.className = value;
-    });
-  }
-  if (props["aria-label"] !== undefined) {
-    bindProperty(props["aria-label"], (value) => {
-      element.setAttribute("aria-label", value);
-    });
-  }
-  if (props.placeholder !== undefined) {
-    // placeholder 仅对输入框有效，静态写入原生 DOM 属性。
-    if (!(element instanceof HTMLInputElement)) {
-      throw new Error(`The "placeholder" prop is not supported on <${tag}>`);
-    }
-    element.placeholder = props.placeholder;
-  }
+  applyElementProperty(element, "id", props.id);
+  applyElementProperty(element, "type", props.type);
+  applyElementProperty(element, "class", props.class);
+  applyElementProperty(element, "aria-label", props["aria-label"]);
+  applyElementProperty(element, "placeholder", props.placeholder);
   if (props.onClick) {
     const handleClick = props.onClick;
     element.addEventListener("click", handleClick);
@@ -130,41 +200,16 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
       element.removeEventListener("change", handleChange);
     });
   }
-  if (props.disabled !== undefined) {
-    // 按原生属性类型检查，输入框、按钮等拥有布尔 disabled 的元素都可以绑定。
-    if (!("disabled" in element) || typeof element.disabled !== "boolean") {
-      throw new Error(`The "disabled" prop is not supported on <${tag}>`);
-    }
-    bindProperty(props.disabled, (value) => {
-      element.disabled = value;
-    });
-  }
-  if (props.checked !== undefined) {
-    // 仅输入框支持 checked 属性，直接写入布尔属性 element.checked 以支持 true / false 双向切换。
-    if (!(element instanceof HTMLInputElement)) {
-      throw new Error(`The "checked" prop is not supported on <${tag}>`);
-    }
-    bindProperty(props.checked, (value) => {
-      element.checked = value;
-    });
-  }
+  applyElementProperty(element, "disabled", props.disabled);
+  applyElementProperty(element, "checked", props.checked);
 
   // 依次把每个子 Node 挂进当前元素；所有子节点的订阅清理已由所有权树统一接管。
   for (const child of children) {
     element.appendChild(child);
   }
 
-  if (props.value !== undefined) {
-    // 选项先挂载才能设置 select.value；同值不写入能保留输入框的光标。
-    if (!("value" in element) || typeof element.value !== "string") {
-      throw new Error(`The "value" prop is not supported on <${tag}>`);
-    }
-    bindProperty(props.value, (value) => {
-      if (element.value !== value) {
-        element.value = value;
-      }
-    });
-  }
+  // 选项必须先挂载，select 才能用 value 找到对应的项。
+  applyElementProperty(element, "value", props.value);
 
   // 所有属性、事件与子节点准备就绪后再触发 ref 回调，让外部拿到完整初始化的真实元素引用。
   props.ref?.(node);
