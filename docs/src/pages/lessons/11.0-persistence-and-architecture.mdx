@@ -36,7 +36,7 @@ flowchart TD
 
 这一章分四小节把整套分层架构落地，并且保证每一步都继续跑在第 9 章的 JSX 编译器之上：
 
-- **11.1 领域模型与带容错校验的 `TodoStorage` 接口**：拆出 `types.ts`、`storage.ts`（定义 `TodoStorage` 接口与逐项校验 `parseStoredTodos` / `loadTodos` / `saveTodos`）、浏览器适配器 `adapters/local-todo-storage.ts` 与内存测试替身，搞定损坏数据部分恢复、重复 ID 去重与读写故障降级。
+- **[11.1 领域模型与带容错校验的 `TodoStorage` 接口](../11.1-storage-and-validation/)**：拆出 `types.ts`、`storage.ts`（定义 `TodoStorage` 接口与逐项校验 `parseTodos` / `loadTodosFromStorage`）、浏览器适配器 `adapters/local-todo-storage.ts` 与内存测试替身，搞定损坏数据部分恢复、重复 ID 去重与读写故障降级。
 - **11.2 把状态与持久化收敛进可单测的 `createTodoStore`**：抽离 `todo-store.ts`，用 `Owner` 统一管理自动保存与派生统计的生命周期（首次水合跳过白写、写入只追踪 `todos()`、保存失败不丢内存改动并展示提示），在无 DOM 的 `createRoot` 中毫秒级验证全部业务规则。
 - **11.3 拆分 5 个纯展示组件并用 `App.tsx` 组装**：拆出 `PersistenceBanner`、`TodoComposer`、`TodoFilters`、`TodoItem`、`TodoList` 五个职责单一的子组件，让 `App.tsx` 退回薄壳视图并在 `main.tsx` 完成依赖注入装配，端到端通过全部持久化与交互测试。
 - **11.4 将 Todo 分层边界接入依赖图守卫**：复用第 10 章的 `tools/dependency-graph.ts`，把 Todo 每一层“允许依赖谁”写成一张白名单表，由通用的 `createLayerRule` 生成架构规则，让前三节的分层决定变成每次 `pnpm test:run` 都会执行的检查。

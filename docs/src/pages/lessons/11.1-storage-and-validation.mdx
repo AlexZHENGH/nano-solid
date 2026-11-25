@@ -1,0 +1,89 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "11.1 领域模型与带容错校验的 TodoStorage 接口"
+description: "抽离纯领域类型与最小字符串存储槽接口 TodoStorage，实现逐项字段校验、重复 ID 去重与读故障安全回退，并用内存 fake 隔离浏览器 localStorage。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+在给 Todo 加上持久化之前，先想清楚一个工程问题：**如果直接在业务代码里到处写 `JSON.parse(window.localStorage.getItem(...) ?? "[]") as Todo[]`，上线后会发生什么？**
+
+至少会撞上四类真实故障：
+
+1. **盲信 `as Todo[]` 类型断言**：TypeScript 的类型只在编译期存在。一旦本地存储里混进了旧版本数据结构、手动改坏的 JSON、小数或负数 `id`，运行时 `as Todo[]` 不会做任何检查，后续 `<For>` 按 `id` 复用行节点或渲染文本时会直接出错；
+2. **一颗老鼠屎坏了一锅粥**：如果数组里共有 10 条任务，只有 1 条字段损坏，粗暴地整份丢弃回退默认数据会让用户丢失其余 9 条合法记录；
+3. **缺键 `null` 与空列表 `"[]"` 混为一谈**：用户把所有任务都删光后，存储里是 `"[]"`，下次打开应该看到空列表；只有键根本不存在（`null`）时，才应该展示初次访问的 3 条示例任务；
+4. **`window.localStorage` 很难在单测里安全模拟故障**：在隐私模式、受限 iframe 或配额已满的浏览器里，连读取 `window.localStorage` 本身都可能抛 `SecurityError` 或 `QuotaExceededError`。
+
+这一节我们先搭好最底层的两块积木：纯领域类型 `examples/todo-app/types.ts` 和零浏览器依赖的存储边界 `examples/todo-app/storage.ts`。
+
+## 1. 为什么 `TodoStorage` 只定义 `read()` / `write()` 两个字符串方法？
+
+我们没有把 `TodoStorage` 设计成“带增删改查的胖仓库接口”，而是把它收窄为一个极简的**同步字符串存储槽**：
+
+```ts
+export type TodoStorage = {
+  read(): string | null;
+  write(raw: string): void;
+};
+```
+
+这样切分职责有两个直接收益：
+
+- **解析与容错规则只有一份**：不管是浏览器 `localStorage` 还是测试内存 fake，拿到的都是原始字符串 `string | null`，全部统一交给 `storage.ts` 里的 `parseTodos` 和 `loadTodosFromStorage` 校验，适配器里不需要重复写 `JSON.parse` 或 `try / catch`；
+- **浏览器适配器极薄且延迟取全局对象**：看 `examples/todo-app/adapters/local-todo-storage.ts`：
+
+```ts
+export function createLocalTodoStorage(key = DEFAULT_STORAGE_KEY): TodoStorage {
+  return {
+    read(): string | null {
+      return window.localStorage.getItem(key);
+    },
+    write(raw: string): void {
+      window.localStorage.setItem(key, raw);
+    },
+  };
+}
+```
+
+注意它**故意不在 `createLocalTodoStorage()` 调用时缓存 `const ls = window.localStorage`**，而是把访问推迟到每次 `read()` / `write()` 内部。这样在禁止访问 `localStorage` 的受限浏览器环境下，构造适配器不会提前炸掉，真正调用 `read()` 抛出的异常会被 `loadTodosFromStorage` 的 `try / catch` 稳稳接住并优雅降级。
+
+与此同时，我们在 `examples/todo-app/test-support/memory-todo-storage.ts` 实现了可观测的内存替身 `createMemoryTodoStorage`：能自由注入损坏 JSON、随时切换 `setFailRead(true)` / `setFailWrite(true)` 并统计 `getWriteCount()`，彻底告别脆弱的全局 `vi.spyOn(Storage.prototype, ...)`。
+
+## 2. 逐项校验、重复 ID 去重与“不抢占”边界
+
+`parseTodos(raw)` 的处理规则分两层：
+
+1. **根节点不可挽救时直接抛错**：如果 `JSON.parse(raw)` 语法报错，或者解析出来的根节点不是数组（例如 `{"id": 1}`、`123`），直接抛错交给上层 `loadTodosFromStorage` 回退默认任务并标记 `loadFailed: true`；
+2. **数组元素逐项校验与去重**：对合法数组逐项调用 `isValidTodo(item)`，严格验证它是普通对象（非 `null`、非数组），且满足：
+   - `typeof item.id === "number" && Number.isSafeInteger(item.id) && item.id > 0`（排除 `0`、负数、小数、`NaN` 与 `Infinity`）；
+   - `typeof item.text === "string"`；
+   - `typeof item.completed === "boolean"`。
+
+这里有两个特别容易写反的工程细节：
+
+- **必须先校验 `isValidTodo(item)`，再检查 `seenIds.has(item.id)`**：假设存储里先出现了一条损坏记录 `{ id: 2, text: 999, completed: false }`，紧接着是一条完好记录 `{ id: 2, text: "首条合法记录", completed: false }`。如果先登记 `seenIds.add(2)` 再校验字段，损坏记录就会错误抢占 `id = 2`，把后面真正的合法任务误杀掉；
+- **推入结果数组时显式构造干净的 `{ id: item.id, text: item.text, completed: item.completed }`**，既剥离掉 JSON 中可能夹带的多余未知字段，又避免把解析出的原始对象引用直接暴露给外层被意外篡改。
+
+## 3. `loadTodosFromStorage` 的四种明确语义
+
+把 `storage.read()` 和 `parseTodos(raw)` 放进同一个 `try / catch` 后，启动恢复恰好对应四种互不混淆的状态：
+
+| 场景                            | `todos`            | `warning`                    | `loadFailed` |
+| ------------------------------- | ------------------ | ---------------------------- | ------------ |
+| 键不存在（`raw === null`）      | `fallback` 浅拷贝  | `null`                       | `false`      |
+| 全部合法（含空数组 `"[]"`）     | 解析出的 `todos`   | `null`                       | `false`      |
+| 数组中有坏项或重复 ID           | 救回的合法 `todos` | 告知恢复条数与跳过条数       | `false`      |
+| `read()` 抛错、坏 JSON 或非数组 | `fallback` 浅拷贝  | 告知读取失败且原存储未被覆盖 | `true`       |
+
+特别注意最后一行：当 `loadFailed` 为 `true` 时，下一节的 `createTodoStore` 会知道“现在展示的是回退默认任务，不是从损坏存储读出来的真数据”，并在首次水合时绝不主动写回覆盖用户磁盘上的原始数据。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/11.1 11.1-learn
+> ```
+>
+> 本节已新增 `examples/todo-app/types.ts`、`examples/todo-app/adapters/local-todo-storage.ts`、`examples/todo-app/test-support/memory-todo-storage.ts`，搭建了 `examples/todo-app/storage.ts` 的类型与函数骨架，并在 `examples/todo-app/storage.test.ts` 新增 6 条 `it.skip` 测试。补齐 `isValidTodo`、`parseTodos` 与 `loadTodosFromStorage`，运行 `pnpm format && pnpm check && pnpm test:run`，确认全部 162 条测试通过。
+
+<LessonSolution slug="11.1-storage-and-validation" tag="11.1-solution" />
