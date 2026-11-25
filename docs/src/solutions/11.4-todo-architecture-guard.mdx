@@ -1,0 +1,81 @@
+从 `TodoList.tsx` 导入 `../adapters/local-todo-storage.ts` 时，依赖图已经算出了两个仓内路径。`classifyTodoFile` 把导入方归到 `components`，把目标文件归到 `adapters`。查 `allow.components` 时找不到 `adapters`，所以这条导入会被拦住。
+
+### 一条依赖怎么通过检查
+
+`createLayerRule` 接收三个配置项。`name` 会出现在报错里，`classify` 决定文件在哪一层，`allow` 决定每一层能导入谁。返回的对象沿用 `ArchitectureRule` 的两个入口。`matchFrom` 让引擎跳过这条规则管不到的文件，`checkEdge` 负责检查一条导入。
+
+```ts
+/**
+ * 根据“每层允许依赖谁”的白名单表生成一条架构规则。
+ *
+ * 只有被 classify 归入某一层的来源文件受约束。依赖目标是仓内文件时用 classify 求出所在层，
+ * 是外部包时以包名（如 "nano-solid"、"@scope/pkg"）作为层名，再到来源层的白名单里查找许可。
+ *
+ * @param options 规则名称、文件归层函数与分层白名单表。
+ * @returns 可直接交给 checkArchitectureRules 执行的架构规则。
+ */
+export function createLayerRule(options: LayerRuleOptions): ArchitectureRule {
+  // 来源文件按 classify 归层；依赖目标按“仓内文件归层、外部包取包名”求出目标层，再按白名单与 typeOnly 许可逐条判定。
+  const { name, classify, allow } = options;
+
+  /**
+   * 给相对路径和包导入取一个可用于查表的层名。
+   * @param edge 当前检查的依赖边。
+   * @returns 目标层名，仓内文件未归层时返回 null。
+   */
+  const resolveTargetLayer = (edge: DependencyEdge): string | null => {
+    if (edge.resolvedTo !== null) return classify(edge.resolvedTo);
+
+    // 作用域也是包名的一部分，不能把 @scope 下的所有包当成同一个包。
+    const segments = edge.specifier.split("/");
+    return edge.specifier.startsWith("@") ? segments.slice(0, 2).join("/") : (segments[0] ?? null);
+  };
+
+  return {
+    name,
+    matchFrom: (file) => classify(file) !== null,
+    checkEdge: (edge) => {
+      // 只有来源归了层，才知道该查白名单里的哪一行。
+      const fromLayer = classify(edge.from);
+      if (fromLayer === null) return null;
+
+      // 已受约束的文件如果导入未归层的目标，要指出缺的是哪一个模块。
+      const targetLayer = resolveTargetLayer(edge);
+      if (targetLayer === null) {
+        return `${fromLayer} 层依赖了未归入任何层的模块 "${edge.specifier}"`;
+      }
+
+      // 只查来源层的许可。来源层没有配置时，默认禁止。
+      const permission = (allow[fromLayer] ?? []).find((entry) =>
+        typeof entry === "string" ? entry === targetLayer : entry.layer === targetLayer,
+      );
+      if (permission === undefined) {
+        return `${fromLayer} 层不允许依赖 ${targetLayer} 层 "${edge.specifier}"`;
+      }
+
+      // 已经允许接触这一层，再确认这条导入有没有带进运行时的值。
+      if (typeof permission !== "string" && !edge.typeOnly) {
+        return `${fromLayer} 层只能用 import type 依赖 ${targetLayer} 层 "${edge.specifier}"`;
+      }
+      return null;
+    },
+  };
+}
+```
+
+`resolveTargetLayer` 会把 `@scope/pkg/sub` 归到 `@scope/pkg`。这样一条包级许可就能覆盖同一个包的子路径。对于相对导入，`classify` 返回 `null` 时，报错会直接给出原始导入路径，方便判断是忘了给文件归层，还是越出了应用边界。
+
+再看 `App.tsx`。`import type { TodoStore } from "./todo-store.ts"` 命中 `{ layer: "store", typeOnly: true }`，而且依赖边上已经有 `typeOnly: true`，可以通过。换成 `import { createTodoStore } from "./todo-store.ts"`，命中的是同一条许可，这次会在最后一个判断里报错。`App.tsx` 可以接收 Store，创建 Store 的工作留在组合根。
+
+### 看一次真实的违例
+
+临时在 `TodoList.tsx` 的第 4 行加入前面的导入，测试报告里就能看到是哪一条规则和哪一行出的问题。
+
+```text
+规则  todo-app-layers
+位置  examples/todo-app/components/TodoList.tsx:4
+导入  ../adapters/local-todo-storage.ts
+原因  components 层不允许依赖 adapters 层
+```
+
+仓库测试先确认每个 Todo 源文件都归了层，再检查实际导入。比如新建 `services/foo.ts` 时，即使这个文件还没有任何导入，第一道断言也会报出它的路径。少了这道断言，`matchFrom` 会直接跳过它。

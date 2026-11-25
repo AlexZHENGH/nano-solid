@@ -324,11 +324,50 @@ export function checkArchitectureRules(
  * @param options 规则名称、文件归层函数与分层白名单表。
  * @returns 可直接交给 checkArchitectureRules 执行的架构规则。
  */
-export function createLayerRule(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  options: LayerRuleOptions,
-): ArchitectureRule {
+export function createLayerRule(options: LayerRuleOptions): ArchitectureRule {
   // 来源文件按 classify 归层；依赖目标按“仓内文件归层、外部包取包名”求出目标层，再按白名单与 typeOnly 许可逐条判定。
-  // TODO: 实现 createLayerRule
-  throw new Error("TODO: 实现 createLayerRule");
+  const { name, classify, allow } = options;
+
+  /**
+   * 给相对路径和包导入取一个可用于查表的层名。
+   * @param edge 当前检查的依赖边。
+   * @returns 目标层名，仓内文件未归层时返回 null。
+   */
+  const resolveTargetLayer = (edge: DependencyEdge): string | null => {
+    if (edge.resolvedTo !== null) return classify(edge.resolvedTo);
+
+    // 作用域也是包名的一部分，不能把 @scope 下的所有包当成同一个包。
+    const segments = edge.specifier.split("/");
+    return edge.specifier.startsWith("@") ? segments.slice(0, 2).join("/") : (segments[0] ?? null);
+  };
+
+  return {
+    name,
+    matchFrom: (file) => classify(file) !== null,
+    checkEdge: (edge) => {
+      // 只有来源归了层，才知道该查白名单里的哪一行。
+      const fromLayer = classify(edge.from);
+      if (fromLayer === null) return null;
+
+      // 已受约束的文件如果导入未归层的目标，要指出缺的是哪一个模块。
+      const targetLayer = resolveTargetLayer(edge);
+      if (targetLayer === null) {
+        return `${fromLayer} 层依赖了未归入任何层的模块 "${edge.specifier}"`;
+      }
+
+      // 只查来源层的许可。来源层没有配置时，默认禁止。
+      const permission = (allow[fromLayer] ?? []).find((entry) =>
+        typeof entry === "string" ? entry === targetLayer : entry.layer === targetLayer,
+      );
+      if (permission === undefined) {
+        return `${fromLayer} 层不允许依赖 ${targetLayer} 层 "${edge.specifier}"`;
+      }
+
+      // 已经允许接触这一层，再确认这条导入有没有带进运行时的值。
+      if (typeof permission !== "string" && !edge.typeOnly) {
+        return `${fromLayer} 层只能用 import type 依赖 ${targetLayer} 层 "${edge.specifier}"`;
+      }
+      return null;
+    },
+  };
 }

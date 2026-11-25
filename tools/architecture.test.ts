@@ -319,7 +319,7 @@ describe("基于 Babel AST 的依赖图架构守卫", () => {
 });
 
 describe("分层白名单规则", () => {
-  it.skip("只放行白名单内的依赖，拦截未授权的层、未归类的模块、未列出的外部包与越权的值导入", () => {
+  it("只放行白名单内的依赖，拦截未授权的层、未归类的模块、未列出的外部包与越权的值导入", () => {
     // 一张与 Todo 无关的最小分层表：ui 可依赖 domain、nano-solid，只能以类型方式依赖 infra。
     const rule = createLayerRule({
       name: "demo-layers",
@@ -389,7 +389,7 @@ describe("分层白名单规则", () => {
     expect(messages[3]).toContain("未归入任何层");
   });
 
-  it.skip("Todo 示例应用的每个生产文件都已归层，且真实依赖完全符合分层白名单", () => {
+  it("Todo 示例应用的每个生产文件都已归层，且真实依赖完全符合分层白名单", () => {
     // 先确认扫描到了应用源码，避免入口目录改名后对着空图通过。
     const files = listSourceFiles(ROOT_DIR, ["examples/todo-app"]);
     expect(files.length).toBeGreaterThan(0);
