@@ -50,6 +50,7 @@ import { frontmatter as storageValidation } from "./lessons/11.1-storage-and-val
 import { frontmatter as todoStoreLesson } from "./lessons/11.2-todo-store.mdx";
 import { frontmatter as componentsComposition } from "./lessons/11.3-components-and-composition.mdx";
 import { frontmatter as todoArchitectureGuard } from "./lessons/11.4-todo-architecture-guard.mdx";
+import { frontmatter as asyncTodo } from "./lessons/12.0-async-todo.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -104,6 +105,7 @@ const storageValidationUrl = `${baseUrl}/lessons/11.1-storage-and-validation/`;
 const todoStoreLessonUrl = `${baseUrl}/lessons/11.2-todo-store/`;
 const componentsCompositionUrl = `${baseUrl}/lessons/11.3-components-and-composition/`;
 const todoArchitectureGuardUrl = `${baseUrl}/lessons/11.4-todo-architecture-guard/`;
+const asyncTodoUrl = `${baseUrl}/lessons/12.0-async-todo/`;
 ---
 
 <BookLayout
@@ -222,4 +224,5 @@ const todoArchitectureGuardUrl = `${baseUrl}/lessons/11.4-todo-architecture-guar
     <li><a href={componentsCompositionUrl}>{componentsComposition.title}</a></li>
     <li><a href={todoArchitectureGuardUrl}>{todoArchitectureGuard.title}</a></li>
   </ul>
+  <h3 class="course-chapter"><a href={asyncTodoUrl}>{asyncTodo.title}</a></h3>
 </BookLayout>

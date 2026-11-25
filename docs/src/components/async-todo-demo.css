@@ -1,0 +1,29 @@
+/* 同步指示放在整份列表的状态旁边，只给装饰图标加动画。 */
+.async-todo-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.async-todo-spinner {
+  box-sizing: border-box;
+  inline-size: 0.78em;
+  block-size: 0.78em;
+  border: 1.5px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: async-todo-spin 0.8s linear infinite;
+}
+
+@keyframes async-todo-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* 保留同步文字和图标，以静态方式提示请求仍在等待。 */
+@media (prefers-reduced-motion: reduce) {
+  .async-todo-spinner {
+    animation: none;
+  }
+}
