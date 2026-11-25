@@ -24,10 +24,11 @@ type Source = {
 };
 
 /**
- * 计算节点的公共底座：同时是 Owner，并以 Map 记录上一轮按读取顺序访问过的上游数据源及其版本号快照。
+ * 计算节点的公共底座：同时是 Owner，以 Map 记录上游数据源版本号快照，并用 running 标记防重入与环检测。
  */
 type ComputationBase = Owner & {
   dependencies: Map<Source, number>;
+  running: boolean;
 };
 
 /** 内部维护的 effect 计算节点：保存用户副作用回调。 */
@@ -74,6 +75,10 @@ const pendingEffects = new Set<Effect>();
 
 /** 等待本轮补刷的独立急切 memo 队列。 */
 const pendingMemos = new Set<Memo>();
+
+/** 单个计算节点在单次同步刷新中允许执行的最大次数，超出即视为死循环并熔断。 */
+// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
+const MAX_UPDATES = 100;
 
 /**
  * 判断一个上游 Source 是否为 Memo 节点（只有 Memo 需要在 Pull 阶段递归核对并刷新）。
@@ -147,6 +152,7 @@ function invalidate(source: Source): void {
   for (const subscriber of source.subscribers) {
     markDirty(subscriber);
   }
+  // 只有处于最外层（不在 batch、不在刷新中且不在任何计算执行期间）才立刻触发同步刷新，避免重入正在运行的计算。
   // 排队可以发生在当前计算内，刷新要等到它退出。
   if (batchDepth === 0 && !isFlushing && !currentComputation) {
     flushEffects();
@@ -178,8 +184,9 @@ function dependenciesChanged(computation: Computation): boolean {
  * @param memo 需要保证缓存最新一致的 memo 节点。
  */
 function updateMemo(memo: Memo): void {
-  // 已释放直接返回缓存；未初始化或 dirty 直接调用 runComputation(memo)；check 时仅在 dependenciesChanged(memo) 为真时重算，否则标回 clean。
+  // 已释放直接返回缓存；若正在求值途中被再次读取则立即抛出循环依赖错误；dirty 直接重算，check 先核对上游版本。
   if (memo.disposed) return;
+  // TODO: 检查 memo.running，若为 true 立即抛出 Error("Circular memo dependency detected")。
   if (!memo.initialized || memo.state === "dirty") {
     runComputation(memo);
   } else if (memo.state === "check") {
@@ -192,12 +199,13 @@ function updateMemo(memo: Memo): void {
 }
 
 /**
- * 同步清空待执行队列：先处理 pendingEffects（按需拉取依赖并在版本确实变化时重跑，顺带释放已退出的子分支），再补刷剩余的独立急切 memo。
+ * 同步清空待执行队列：先处理 pendingEffects（按需拉取依赖并在版本确实变化时重跑，顺带释放已退出的子分支），再补刷剩余的独立急切 memo；按单计算节点计数防止死循环。
  */
 function flushEffects(): void {
-  // 已在刷新中则直接返回；循环先消费 pendingEffects（经 dependenciesChanged 校验），再消费 pendingMemos（经 updateMemo 补刷）；异常时清空两队列并复原 isFlushing。
+  // 已在刷新中则直接返回；用 runCounts 按单个计算节点累计本轮执行次数，超过 MAX_UPDATES 时熔断抛错；异常时清空两队列并复原 isFlushing。
   if (isFlushing) return;
   isFlushing = true;
+  // TODO: 用 Map<Computation, number> 为本轮每个实际执行的计算节点计数，超过 MAX_UPDATES 抛出 Error("Maximum reactive update depth exceeded")。
   try {
     while (pendingEffects.size > 0 || pendingMemos.size > 0) {
       if (pendingEffects.size > 0) {
@@ -326,7 +334,8 @@ function dispose(owner: Owner): void {
  * @param computation 本轮要执行的 effect 或 memo 节点。
  */
 function runComputation(computation: Computation): void {
-  // 同一轮队列快照里，前面的计算可能已经释放了当前节点，进入前必须先跳过。
+  // 已释放或正在执行中的计算直接跳过，避免同步递归重入破坏生命周期顺序。
+  // TODO: 在此补充 computation.running 重入保护，执行期间置位 computation.running = true 并在 finally 复原，最外层正常退出且有待刷新任务时调用 flushEffects()。
   if (computation.disposed) return;
   // 保存外层追踪与所有权上下文，并在 try/finally 中恢复；若回调抛错，则在 catch 中释放半截订阅与子作用域后继续抛出。
   const previousComputation = currentComputation;
@@ -453,6 +462,7 @@ export function createEffect(callback: EffectCallback): Dispose {
     disposed: false,
     callback,
     dependencies: new Map(),
+    running: false,
   };
   effect.onDispose = () => {
     cleanupDependencies(effect);
@@ -482,6 +492,7 @@ export function createMemo<T>(compute: () => T): () => T {
     cleanups: [],
     disposed: false,
     dependencies: new Map(),
+    running: false,
     subscribers: new Set(),
     version: 0,
     compute,
@@ -530,6 +541,8 @@ export function batch<T>(fn: () => T): T {
     callbackError = error;
   } finally {
     batchDepth -= 1;
+    // 最外层 batch 退出时，若当前不在刷新中且不在计算执行期间，才触发同步刷新。
+    // TODO: 在条件中补充 !currentComputation，避免计算内调用 batch 提前打断当前计算。
     if (batchDepth === 0 && !isFlushing && !currentComputation) {
       if (hasCallbackError) {
         try {

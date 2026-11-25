@@ -1024,6 +1024,178 @@ it("untrack 暂时屏蔽依赖追踪但保留当前 Owner，内部仍可读到�
   expect(cleanup).toHaveBeenCalledTimes(2);
 });
 
+it.skip("effect 首次执行或重跑时写回自身依赖不会递归重入，而是按顺序排队收敛并正确成对清理", () => {
+  const [count, setCount] = createSignal(0);
+  const events: string[] = [];
+
+  const dispose = createEffect(() => {
+    const current = count();
+    events.push(`start:${current}`);
+    onCleanup(() => {
+      events.push(`cleanup:${current}`);
+    });
+    if (current < 2) {
+      setCount(current + 1);
+    }
+    events.push(`end:${current}`);
+  });
+
+  // 每一轮必须完整跑完 start -> end，再执行上一轮 cleanup 进入下一轮，绝不嵌套交错。
+  expect(events).toEqual([
+    "start:0",
+    "end:0",
+    "cleanup:0",
+    "start:1",
+    "end:1",
+    "cleanup:1",
+    "start:2",
+    "end:2",
+  ]);
+  expect(count()).toBe(2);
+
+  dispose();
+  expect(events.at(-1)).toBe("cleanup:2");
+});
+
+it.skip("在运行中的 effect 内部调用 batch 写回不会打断当前执行，而是等外层 effect 结束后再统一刷新", () => {
+  const [step, setStep] = createSignal(0);
+  const [label, setLabel] = createSignal("init");
+  const order: string[] = [];
+
+  createEffect(() => {
+    const current = step();
+    order.push(`writer:start:${current}`);
+    if (current === 0) {
+      batch(() => {
+        setStep(1);
+        setLabel("done");
+      });
+    }
+    order.push(`writer:end:${current}`);
+  });
+
+  createEffect(() => {
+    order.push(`reader:${step()}:${label()}`);
+  });
+
+  // writer 首次执行内调用 batch 后，先完成 writer:end:0，再轮到 writer:start:1 -> writer:end:1。
+  expect(order).toEqual([
+    "writer:start:0",
+    "writer:end:0",
+    "writer:start:1",
+    "writer:end:1",
+    "reader:1:done",
+  ]);
+});
+
+it.skip("超过 100 个独立计算在同一轮更新中执行不会误触 MAX_UPDATES 熔断", () => {
+  const [version, setVersion] = createSignal(0);
+  let totalRuns = 0;
+
+  for (let i = 0; i < 120; i += 1) {
+    createEffect(() => {
+      version();
+      totalRuns += 1;
+    });
+  }
+
+  expect(totalRuns).toBe(120);
+
+  // 单轮同时唤醒 120 个彼此独立的 effect，每个只跑 1 次，不应触发死循环熔断。
+  expect(() => setVersion(1)).not.toThrow();
+  expect(totalRuns).toBe(240);
+});
+
+it.skip("无限自写回的 effect 会在达到 MAX_UPDATES 时熔断抛错，并恢复调度器供后续更新使用", () => {
+  const [loop, setLoop] = createSignal(0);
+  const [healthy, setHealthy] = createSignal("a");
+  const seenHealthy: string[] = [];
+
+  createEffect(() => {
+    const current = loop();
+    if (current > 0) {
+      setLoop(current + 1);
+    }
+  });
+
+  createEffect(() => {
+    seenHealthy.push(healthy());
+  });
+
+  expect(() => setLoop(1)).toThrow("Maximum reactive update depth exceeded");
+
+  // 熔断后队列与 isFlushing 必须已恢复，其他无关状态的写入照常生效。
+  setHealthy("b");
+  expect(seenHealthy).toEqual(["a", "b"]);
+});
+
+it.skip("两个 effect 互相写回形成乒乓死循环时同样会触发熔断并恢复后续更新", () => {
+  const [left, setLeft] = createSignal(0);
+  const [right, setRight] = createSignal(0);
+  const [healthy, setHealthy] = createSignal(0);
+  const seenHealthy: number[] = [];
+
+  createEffect(() => {
+    const current = left();
+    if (current > 0) {
+      setRight(current + 1);
+    }
+  });
+
+  createEffect(() => {
+    const current = right();
+    if (current > 0) {
+      setLeft(current + 1);
+    }
+  });
+
+  createEffect(() => {
+    seenHealthy.push(healthy());
+  });
+
+  expect(() => setLeft(1)).toThrow("Maximum reactive update depth exceeded");
+
+  setHealthy(42);
+  expect(seenHealthy).toEqual([0, 42]);
+});
+
+it.skip("自引用或相互引用的循环 createMemo 会立即抛出循环依赖错误并清理半截订阅", () => {
+  const [flag, setFlag] = createSignal(false);
+  const [healthy, setHealthy] = createSignal("ok");
+  const seenHealthy: string[] = [];
+  const cleanupA = vi.fn();
+
+  // 场景 1：重跑时切入自引用环（selfMemo -> selfMemo）。
+  const [selfCycle, setSelfCycle] = createSignal(false);
+  let selfMemo!: () => number;
+  selfMemo = createMemo(() => (selfCycle() ? selfMemo() + 1 : 0));
+  expect(selfMemo()).toBe(0);
+  expect(() => setSelfCycle(true)).toThrow("Circular memo dependency detected");
+
+  // 场景 2：动态切入相互引用环（a -> b -> a）。
+  let memoB!: () => number;
+  const memoA = createMemo(() => {
+    onCleanup(cleanupA);
+    return flag() ? memoB() + 1 : 1;
+  });
+  memoB = createMemo(() => (flag() ? memoA() + 1 : 2));
+
+  createEffect(() => {
+    seenHealthy.push(healthy());
+  });
+
+  expect(memoA()).toBe(1);
+  expect(memoB()).toBe(2);
+
+  expect(() => setFlag(true)).toThrow("Circular memo dependency detected");
+  // 重跑前先清理第 1 轮的 cleanupA，抛错回滚再清理第 2 轮半途登记的 cleanupA，共 2 次。
+  expect(cleanupA).toHaveBeenCalledTimes(2);
+
+  // 报错后调度器状态已恢复，其他更新照常运行。
+  setHealthy("recovered");
+  expect(seenHealthy).toEqual(["ok", "recovered"]);
+});
+
 it("清理回调抛错时仍释放兄弟 effect 和父作用域", () => {
   const [count, setCount] = createSignal(0);
   const observed = vi.fn();
