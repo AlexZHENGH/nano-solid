@@ -34,7 +34,7 @@ function buildLibrary(): void {
 }
 
 describe("库产物构建与类型声明契约", () => {
-  it.skip("tsc -p tsconfig.build.json 在 dist/ 中产出全部公共入口的 JS、.d.ts 与 source map，且不含测试与演示入口", () => {
+  it("tsc -p tsconfig.build.json 在 dist/ 中产出全部公共入口的 JS、.d.ts 与 source map，且不含测试与演示入口", () => {
     buildLibrary();
 
     const files = listRelativeFiles(DIST_DIR);
@@ -61,7 +61,7 @@ describe("库产物构建与类型声明契约", () => {
     expect(files.some((file) => file.startsWith("src/"))).toBe(false);
   });
 
-  it.skip("dist/ 产物将相对 .ts 导入重写为 .js，并可直接被原生 Node ESM 加载运行", async () => {
+  it("dist/ 产物将相对 .ts 导入重写为 .js，并可直接被原生 Node ESM 加载运行", async () => {
     buildLibrary();
 
     const indexJs = readFileSync(resolve(DIST_DIR, "index.js"), "utf8");
@@ -104,7 +104,7 @@ describe("库产物构建与类型声明契约", () => {
     expect(plugin.enforce).toBe("pre");
   });
 
-  it.skip("dist/*.d.ts 完整声明公共 API、JSX 命名空间、compiler-runtime 与 Vite 插件类型", () => {
+  it("dist/*.d.ts 完整声明公共 API、JSX 命名空间、compiler-runtime 与 Vite 插件类型", () => {
     buildLibrary();
 
     const indexDts = readFileSync(resolve(DIST_DIR, "index.d.ts"), "utf8");
@@ -132,7 +132,7 @@ describe("库产物构建与类型声明契约", () => {
     expect(viteDts).toContain("NanoSolidPluginOptions");
   });
 
-  it.skip("公共 API 与 JSX.IntrinsicElements 类型签名保持精确契约", () => {
+  it("公共 API 与 JSX.IntrinsicElements 类型签名保持精确契约", () => {
     // 响应式原语与挂载函数的类型契约。
     expectTypeOf(createSignal<number>).returns.toEqualTypeOf<
       readonly [() => number, (next: number) => void]

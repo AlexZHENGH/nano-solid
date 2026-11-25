@@ -1,0 +1,23 @@
+在 `tsconfig.build.json` 中补全输出目录、声明文件与排除规则：
+
+```json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/main.tsx"]
+}
+```
+
+去掉 `src/package-build.test.ts` 中 4 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`。你会看到：
+
+- `pnpm build:lib` 在 `dist/` 中干净输出 `index`、`jsx-runtime`、`compiler-runtime`、`vite` 及其内部依赖模块的 `.js`、`.d.ts`、`.js.map` 与 `.d.ts.map`，所有相对导入已重写为 `.js`，不含任何 `.test.` 文件或 `main.js`；
+- `pnpm build:demos` 将根计数器与 Todo 示例页打包进独立的 `dist-demos/`，不会覆盖 `dist/`；
+- 全部 145 条测试（含原生 Node ESM 动态加载 `dist/index.js`、`dist/vite.js` 与 `expectTypeOf` 类型契约断言）全部通过。
