@@ -328,3 +328,92 @@ th {
 .dom-demo {
   margin-block: 1.4rem;
 }
+
+/* 第八章批量更新与菱形依赖对比演示样式（仅文档站使用）。 */
+.consistency-demo-section {
+  margin-top: 0.95rem;
+}
+.consistency-demo-section-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--ns-ink-strong);
+}
+.consistency-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+@media (max-width: 640px) {
+  .consistency-demo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.consistency-demo-col {
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-md);
+  background: var(--ns-surface-raised);
+  overflow: hidden;
+}
+.consistency-demo-col-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--ns-border);
+  background: var(--ns-surface-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ns-muted);
+}
+.consistency-demo-list {
+  height: 8.6rem;
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  list-style: none;
+  overflow-y: auto;
+  font-family: var(--ns-font-mono);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+.consistency-demo-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--ns-radius-sm);
+  color: var(--ns-ink);
+}
+.consistency-demo-row + .consistency-demo-row {
+  margin-top: 0.2rem;
+}
+.consistency-demo-row-latest {
+  background: var(--ns-accent-soft);
+  color: var(--ns-accent-hover);
+  font-weight: 600;
+}
+.consistency-demo-row-warn {
+  background: var(--ns-danger-bg);
+  color: var(--ns-danger);
+  font-weight: 600;
+}
+.consistency-demo-tag {
+  flex-shrink: 0;
+  padding: 0.04rem 0.34rem;
+  border-radius: 999px;
+  font-family: var(--ns-font-sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.consistency-demo-tag-warn {
+  border: 1px solid var(--ns-danger-border);
+  background: #ffffff;
+  color: var(--ns-danger);
+}
+.consistency-demo-tag-ok {
+  border: 1px solid var(--ns-border-soft);
+  background: #ffffff;
+  color: var(--ns-accent-hover);
+}

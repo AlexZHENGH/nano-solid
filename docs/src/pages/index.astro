@@ -30,6 +30,7 @@ import { frontmatter as memo } from "./lessons/7.1-memo.mdx";
 import { frontmatter as forList } from "./lessons/7.2-for-list.mdx";
 import { frontmatter as formsRef } from "./lessons/7.3-forms-and-ref.mdx";
 import { frontmatter as todoApp } from "./lessons/7.4-todo-app.mdx";
+import { frontmatter as batchConsistency } from "./lessons/8.0-batch-and-consistency.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -64,6 +65,7 @@ const memoUrl = `${baseUrl}/lessons/7.1-memo/`;
 const forListUrl = `${baseUrl}/lessons/7.2-for-list/`;
 const formsRefUrl = `${baseUrl}/lessons/7.3-forms-and-ref/`;
 const todoAppUrl = `${baseUrl}/lessons/7.4-todo-app/`;
+const batchConsistencyUrl = `${baseUrl}/lessons/8.0-batch-and-consistency/`;
 ---
 
 <BookLayout
@@ -146,4 +148,7 @@ const todoAppUrl = `${baseUrl}/lessons/7.4-todo-app/`;
     <li><a href={formsRefUrl}>{formsRef.title}</a></li>
     <li><a href={todoAppUrl}>{todoApp.title}</a></li>
   </ul>
+  <h3 class="course-chapter">
+    <a href={batchConsistencyUrl}>{batchConsistency.title}</a>
+  </h3>
 </BookLayout>
