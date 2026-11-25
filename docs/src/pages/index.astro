@@ -47,6 +47,7 @@ import { frontmatter as astArchitectureGuard } from "./lessons/10.3-ast-architec
 import { frontmatter as externalConsumerVerify } from "./lessons/10.4-external-consumer-verify.mdx";
 import { frontmatter as persistenceAndArchitecture } from "./lessons/11.0-persistence-and-architecture.mdx";
 import { frontmatter as storageValidation } from "./lessons/11.1-storage-and-validation.mdx";
+import { frontmatter as todoStoreLesson } from "./lessons/11.2-todo-store.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -98,6 +99,7 @@ const astArchitectureGuardUrl = `${baseUrl}/lessons/10.3-ast-architecture-guard/
 const externalConsumerVerifyUrl = `${baseUrl}/lessons/10.4-external-consumer-verify/`;
 const persistenceAndArchitectureUrl = `${baseUrl}/lessons/11.0-persistence-and-architecture/`;
 const storageValidationUrl = `${baseUrl}/lessons/11.1-storage-and-validation/`;
+const todoStoreLessonUrl = `${baseUrl}/lessons/11.2-todo-store/`;
 ---
 
 <BookLayout
@@ -212,5 +214,6 @@ const storageValidationUrl = `${baseUrl}/lessons/11.1-storage-and-validation/`;
   </h3>
   <ul class="course-lessons">
     <li><a href={storageValidationUrl}>{storageValidation.title}</a></li>
+    <li><a href={todoStoreLessonUrl}>{todoStoreLesson.title}</a></li>
   </ul>
 </BookLayout>

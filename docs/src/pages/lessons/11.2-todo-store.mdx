@@ -1,0 +1,62 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "11.2 把状态与持久化收敛进可单测的 createTodoStore"
+description: "区分领域状态与视图交互态，用 Owner 托管 createTodoStore 的派生与自动保存生命周期，规避首轮白写、误追踪与写失败丢数据陷阱，在纯 Node 下无 DOM 单测。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+在 [11.1](../11.1-storage-and-validation/) 里，我们已经有了纯净的 `TodoStorage` 接口和容错校验逻辑。如果此刻把 `loadTodosFromStorage` 和自动保存 `createEffect` 直接塞进 `App.tsx`，虽然也能跑通，却会马上暴露两个工程痛点：
+
+- 想要测试“新增任务时 `nextId` 顺延”“切换筛选不触发写盘”“写入失败保留内存数据并标红提示”这类纯业务规则，每次都必须起 `jsdom`、挂载整棵 DOM 树、模拟点击按钮；
+- 视图草稿（新建输入框文字、行内编辑框文字、焦点元素 `ref`）与领域数据（任务列表、筛选状态、持久化故障状态）搅在一起，职责边界模糊。
+
+这一节我们把领域状态与自动持久化整体抽进 `examples/todo-app/todo-store.ts`，用 `createTodoStore(storage)` 打造一个**零 DOM 依赖、生命周期归属 `Owner`** 的响应式 Store。
+
+## 1. 哪些状态该进 `TodoStore`，哪些必须留在视图组件？
+
+拆分 Store 时最常见的失误是把“组件里所有 `createSignal` 一股脑搬进 Store”。判断归属有一条很实用的标准：**如果给同一个 Store 同时挂两个视图，或者关闭再重开页面，这份状态该不该被共享或保留？**
+
+- **归 `TodoStore`（领域状态与持久化状态）**：
+  - `todos`、`filter`；
+  - 派生状态 `visibleTodos`、`remainingCount`、`completedCount` 与惰性 `completedDetails`；
+  - 持久化状态 `loadWarning`、`saveError`；
+  - 5 个领域命令：`addTodo`、`toggleTodo`、`removeTodo`、`updateTodo`、`setFilter`。
+- **留给视图组件（局部交互态）**：
+  - 新建输入框草稿 `draft` 与 `composerInput` 焦点 `ref`；
+  - 行内编辑态的 `editingId` 与 `editDraft`；
+  - 底部已完成明细折叠开关 `showCompletedDetails`。
+
+注意对外暴露 `TodoStore` 时，我们只暴露只读的 getter（`todos: () => readonly Todo[]` 等）和语义化命令（`addTodo` / `toggleTodo` / `removeTodo` / `updateTodo`），**绝不把原始的 `setTodos` 暴露出去**。这样所有领域不变量（自动 `trim`、忽略空白文案、顺延最大 `id`、无变化时跳过新数组分配）全部集中收口在 Store 内部。
+
+## 2. 为什么 Store 不手写 `store.dispose()`，而是交给调用方的 `Owner`？
+
+`createTodoStore(storage)` 内部会创建 4 个 `createMemo` 和 1 个自动保存 `createEffect`。它们什么时候释放？
+
+答案是直接复用我们在第 6 章建好的 **`Owner` 所有权树**：
+
+- 在浏览器运行时，`main.tsx` 在 `render(() => ...)` 创建的根作用域里调用 `createTodoStore(storage)`，应用卸载时 `render` 返回的 `unmount()` 会连同组件树与 Store 内部的全部 `createMemo`、`createEffect` 一起干净清理；
+- 在单元测试 `examples/todo-app/todo-store.test.ts` 里，直接把 `createTodoStore(storage)` 包进 `createRoot((dispose) => { ... dispose(); })` 中，不仅**完全不需要 `// @vitest-environment jsdom`**，而且可以在纯 Node 环境里几毫秒验证完包括“释放后自动保存立即退订”在内的全部边界。
+
+## 3. 自动保存 `createEffect` 的三个经典陷阱
+
+把持久化写进响应式副作用时，下面三个细节漏掉任何一个都会产生线上 bug：
+
+1. **首轮同步执行必须跳过白写（`isFirstPersistRun`）**：
+   `createEffect` 在创建时会立刻同步运行一次来收集 `todos()` 依赖。如果不跳过首轮，刚打开页面就会把刚读出来的数据原样写回一次。更危险的是当存储里原本是损坏 JSON（`loadFailed: true`）时，启动回退到了默认示例任务，如果首轮不跳过，就会**瞬间用默认数据覆盖掉用户磁盘上原本还能人工抢救的损坏数据**！
+2. **用 `untrack(() => storage.write(...))` 隔离存储副作用**：
+   自动保存 effect 应该**只订阅 `todos()`**。把 `storage.write(...)` 包进 `untrack`，即使将来有人传入一个内部读取了配置 signal 或调试 signal 的自定义 `TodoStorage`，也不会把无关信号泄漏进自动保存的依赖列表。
+3. **写盘失败时保留内存修改并标记 `saveError(true)`**：
+   在 `try / catch` 中捕获 `storage.write` 异常：失败时置位 `setSaveError(true)`，但绝不回滚用户刚刚写进内存 `todos()` 的任务，等存储恢复后下一次保存成功再把 `setSaveError(false)` 清回正常状态。
+
+同样为了避免无效写盘，5 个命令里 `addTodo`（空白文案）、`toggleTodo` / `removeTodo`（找不到目标 `id`）、`updateTodo`（空白或 `trim` 后与原内容相同）都会提前 `return` 不调用 `setTodos`，且 `setFilter` 只改 `filter` 信号不碰 `todos`，保证无实质变动时 `storage.getWriteCount()` 纹丝不动。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/11.2 11.2-learn
+> ```
+>
+> 本节已搭建 `examples/todo-app/todo-store.ts` 的 `TodoStore` 接口与函数骨架，并在 `examples/todo-app/todo-store.test.ts` 新增 6 条纯 Node（无 DOM）`it.skip` 测试，覆盖 CRUD 与 `nextId` 顺延、派生筛选与惰性明细、无操作零写盘、写入失败降级恢复、读失败不覆写原存储以及 `createRoot` 释放自动退订。补齐 `createTodoStore`，运行 `pnpm format && pnpm check && pnpm test:run`，确认全部 168 条测试通过。
+
+<LessonSolution slug="11.2-todo-store" tag="11.2-solution" />
