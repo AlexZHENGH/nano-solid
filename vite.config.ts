@@ -15,6 +15,8 @@ export default defineConfig({
     }),
   ],
   build: {
+    // 示例页打包输出到 dist-demos/，与 dist/ 中的可发布库产物彻底隔离。
+    outDir: "dist-demos",
     rollupOptions: {
       input: {
         main: resolve(import.meta.dirname, "index.html"),

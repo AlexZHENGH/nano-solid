@@ -30,7 +30,7 @@ flowchart LR
 
 这一章分四小节完成从库构建到外部项目真实验收的全过程：
 
-- **10.1 构建库产物与 `.d.ts` 类型声明**：分离库构建（`dist/`）与示例页构建（`dist-demos/`），编写 `tsconfig.lib.json` 输出 5 个正式入口的 ESM 代码、`.d.ts` 与 source map，并用产物及类型契约测试把公共 API 锁死。
+- **[10.1 构建库产物与 `.d.ts` 类型声明](../10.1-library-build/)**：分离库构建（`dist/`）与示例页构建（`dist-demos/`），编写 `tsconfig.build.json` 输出 5 个正式入口的 ESM 代码、`.d.ts` 与 source map，并用产物及类型契约测试把公共 API 锁死。
 - **10.2 配置 `exports`、仓内源码条件与迁移 Todo**：配置 `package.json` 的 `"exports"` 与 `"files"`，把编译器默认 `runtimeModule` 切为 `"nano-solid/compiler-runtime"`，在 `tsconfig.json` 与 `vite.config.ts` 接入仓内私有条件 `"nano-solid-source"` 保留零构建 HMR，将 `examples/todo-app` 从 `#nano-solid` 迁移到正式包名 `nano-solid`。
 - **10.3 基于 Babel AST 的依赖图架构守卫**：复用第 9 章的 `@babel/parser` 与 `@babel/traverse` 实现真正的静态 `import` / `export from` 依赖图分析器，落地跨层依赖拦截与循环依赖检测，为第 11 章的 Todo 分层演进铺平道路。
 - **10.4 独立外部项目打包安装验证**：用 `pnpm pack` 打出真实 `.tgz` 压缩包，在临时独立目录中安装 `nano-solid`，跑通 `tsc --noEmit`、Vite `nanoSolid()` 构建与运行时冒烟测试，端到端验证外部消费者体验。

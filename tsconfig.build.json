@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // 覆盖根配置中的 noEmit，将框架源码编译到 dist/ 并产出 .d.ts、.d.ts.map 与 .js.map。
+    // TODO: 配置 noEmit、rootDir、outDir、declaration、declarationMap 与 sourceMap
+  },
+  // 仅包含框架源码，并排除测试文件与浏览器演示入口 src/main.tsx。
+  "include": ["src/**/*.ts"],
+  // TODO: 在 exclude 中排除 src/**/*.test.ts、src/**/*.test.tsx 与 src/main.tsx
+  "exclude": []
+}

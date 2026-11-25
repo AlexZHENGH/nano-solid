@@ -1,0 +1,58 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "10.1 构建库产物与 .d.ts 类型声明"
+description: "隔离库构建 dist/ 与示例页构建 dist-demos/，配置 tsconfig.build.json 输出 ESM 与 .d.ts 声明，并用产物和类型契约测试锁定公共 API。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+要把 `nano-solid` 变成外部项目能直接安装的 npm 包，第一步不是急着写 `package.json` 的 `"exports"`，而是先回答一个更基础的问题：**我们究竟要把哪些文件交给外部消费者？它们怎么生成、放在哪、怎么确保不会夹带测试文件或破坏类型签名？**
+
+这一节我们就把“库产物构建”和“示例网页打包”彻底分家，用独立的 `tsconfig.build.json` 生成干净的 ESM 代码与 `.d.ts` 类型声明。
+
+## 1. 为什么必须把库产物 `dist/` 与示例页 `dist-demos/` 彻底隔离？
+
+回头看第 9.4 节刚建好的 `vite.config.ts`：运行 `pnpm build` 时，`vite build` 默认把 `index.html` 和 `examples/todo-app/index.html` 打包输出到根目录的 `dist/`，并且 Vite 默认开启 `emptyOutDir: true`。
+
+如果我们同时让库构建输出到 `dist/`，就会立刻撞上一个经典的发布事故：只要有人先跑完库构建、再跑一次示例页构建，Vite 就会把 `dist/index.js` 和 `dist/index.d.ts` 清空得干干净净，只留下带哈希后缀的 `dist/assets/todo-*.js`！
+
+因此本节我们先在配置层把两条构建产物路径彻底分离：
+
+- **`dist/`（`pnpm build:lib`）**：专供 npm 包发布，只包含 `tsconfig.build.json` 产出的框架模块、`.d.ts` 类型声明与映射文件；
+- **`dist-demos/`（`pnpm build:demos`）**：专供根计数器与 Todo 示例页的浏览器静态部署（在 `vite.config.ts` 中显式设置 `build.outDir: "dist-demos"`，并同步加入 `.gitignore`）；
+- **`pnpm build`**：串联 `pnpm run typecheck && pnpm run build:lib && pnpm run build:demos`，一次跑完静态检查、库构建和示例页构建，互不覆盖。
+
+## 2. 为什么选 `tsc -p tsconfig.build.json`，而不是把库打包成一个大文件？
+
+很多脚手架习惯用 Rollup / Vite Library Mode 把整个库打成一个 `dist/nano-solid.js`。对 `nano-solid` 而言，直接用 `tsc -p tsconfig.build.json` 输出保留模块结构的 ESM 产物有四个硬优势：
+
+1. **严格隔离浏览器代码与 Node 插件代码**：我们的包同时提供浏览器运行时（`index.js`、`jsx-runtime.js`、`compiler-runtime.js`）和仅在构建期运行于 Node 的 Vite 插件（`vite.js`，内部依赖 `@babel/*`）。保持 1:1 模块输出后，外部应用的浏览器打包器永远不会把 `@babel/parser` 误拉进前端包；
+2. **一步产出 JS + `.d.ts` + 双向 Source Map**：同时开启 `declaration: true`、`declarationMap: true` 与 `sourceMap: true` 后，不需要任何第三方 `.d.ts` 打包插件。特别是 `declarationMap: true`，能让支持源码映射的编辑器在跳转到 `dist/index.d.ts` 时直接穿透定位回 `src/index.ts`；
+3. **原生 Node ESM 开箱即用**：根 `tsconfig.json` 已启用 `module: "nodenext"` 与 `rewriteRelativeImportExtensions: true`。`tsc` 输出 JS 时会自动把源码里的 `from "./reactive.ts"` 改写成 `from "./reactive.js"`，编译出的 `dist/` 无需任何转译器就能直接被 Node 24 原生 `import()` 加载运行；同时生成的 `.d.ts` 可以直接被外部项目的 TypeScript 严格解析；
+4. **构建前先清空 `dist/`**：`tsc` 本身不会删除旧产物。如果以后在 `src/` 重命名或删掉了一个文件，旧的 `.js` 和 `.d.ts` 会一直残留在 `dist/` 里并被打包发到 npm。因此我们在 `build:lib` 里用跨平台的 `node --input-type=module -e "import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });"` 先清目录再编译。
+
+## 3. 为什么 `rootDir: "src"` 与 `exclude` 缺一不可？
+
+写 `tsconfig.build.json` 时，有两个字段漏掉任何一个都会埋下大雷：
+
+- **必须显式固定 `"rootDir": "src"`**：如果不写 `rootDir`，TypeScript 会按“全部参与编译文件的公共父目录”自动推导输出层级。只要哪天某个文件意外引用了根目录的文件（比如 `package.json`），产物路径就会突然从 `dist/index.js` 偏移成 `dist/src/index.js`，瞬间击穿整份 `package.json` 的 `"exports"` 映射。固定 `"rootDir": "src"` 后，任何越界引用都会在编译期立刻报错；
+- **必须在 `"exclude"` 排除测试与演示入口**：`src/**/*.test.ts`、`src/**/*.test.tsx` 和 `src/main.tsx` 都属于仓内测试或页面入口，绝不能放进库产物。如果漏排测试文件，`dist/*.test.d.ts` 还会把开发依赖 `vitest` 泄露进对外类型声明。
+
+## 4. 用构建产物测试与 `expectTypeOf` 守住对外契约
+
+为了让这条库构建链路从第一天起就有自动化回归保护，我们在 `src/package-build.test.ts` 准备了四条测试：
+
+1. **产物完整性与纯净度**：运行 `tsc -p tsconfig.build.json`，验证 `index`、`jsx-runtime`、`compiler-runtime`、`vite` 四个入口的 `.js` / `.d.ts` / `.map` 齐全，且 `dist/` 中没有 `*.test.*`、`main.*` 或嵌套 `src/`；
+2. **相对扩展名重写与原生 Node ESM 执行**：检查产物不含 `.ts"` 相对导入，并直接用 Node 原生动态 `import()` 加载 `dist/index.js` 和 `dist/vite.js` 执行端到端响应式链路与插件检查；
+3. **`.d.ts` 声明契约**：检查各入口 `.d.ts` 正确导出公共 API 与 `JSX.IntrinsicElements`；
+4. **编译期类型契约（`expectTypeOf`）**：锁定 `createSignal`、`createMemo`、`batch`、`untrack`、`render`、`ShowProps`、`ForProps`、`JSX.IntrinsicElements["input"]["ref"]` 与 `nanoSolid` 的精确类型签名。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/10.1 10.1-learn
+> ```
+>
+> 本节已将示例页输出目录切到 `dist-demos/`、新增 `build:lib` / `build:demos` 脚本，并搭建了 `tsconfig.build.json` 骨架与 `src/package-build.test.ts` 的 4 条 `it.skip` 测试。补齐 `tsconfig.build.json` 中的编译器选项与 `exclude` 列表，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，确认全部 145 条测试与双构建产物（`dist/` 与 `dist-demos/`）全部通过。
+
+<LessonSolution slug="10.1-library-build" tag="10.1-solution" />

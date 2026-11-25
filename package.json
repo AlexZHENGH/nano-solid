@@ -15,7 +15,9 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "pnpm run typecheck && vite build",
+    "build:lib": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });\" && tsc -p tsconfig.build.json",
+    "build:demos": "vite build",
+    "build": "pnpm run typecheck && pnpm run build:lib && pnpm run build:demos",
     "start": "vite preview",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
