@@ -1,0 +1,74 @@
+在 `examples/todo-app/storage.ts` 中依次补齐 `isValidTodo`、`parseTodos` 与 `loadTodosFromStorage`：
+
+```ts
+function isValidTodo(value: unknown): value is Todo {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "number" &&
+    Number.isSafeInteger(value.id) &&
+    value.id > 0 &&
+    typeof value.text === "string" &&
+    typeof value.completed === "boolean"
+  );
+}
+
+export function parseTodos(raw: string): ParseTodosResult {
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) {
+    throw new Error("Stored todos must be an array");
+  }
+
+  const seenIds = new Set<number>();
+  const todos: Todo[] = [];
+  let skippedCount = 0;
+
+  for (const item of parsed) {
+    if (!isValidTodo(item)) {
+      skippedCount += 1;
+      continue;
+    }
+    if (seenIds.has(item.id)) {
+      skippedCount += 1;
+      continue;
+    }
+    seenIds.add(item.id);
+    todos.push({ id: item.id, text: item.text, completed: item.completed });
+  }
+
+  return { todos, skippedCount };
+}
+
+export function loadTodosFromStorage(
+  storage: TodoStorage,
+  fallback: readonly Todo[] = INITIAL_TODOS,
+): LoadTodosResult {
+  try {
+    const raw = storage.read();
+    if (raw === null) {
+      return {
+        todos: fallback.map((todo) => ({ ...todo })),
+        warning: null,
+        loadFailed: false,
+      };
+    }
+
+    const parsed = parseTodos(raw);
+    return {
+      todos: parsed.todos,
+      warning:
+        parsed.skippedCount > 0
+          ? `检测到损坏记录：已恢复 ${parsed.todos.length} 条有效任务，跳过 ${parsed.skippedCount} 条非法或重复项。`
+          : null,
+      loadFailed: false,
+    };
+  } catch {
+    return {
+      todos: fallback.map((todo) => ({ ...todo })),
+      warning: "读取本地存储失败，已回退到默认任务（原存储数据未被覆盖）。",
+      loadFailed: true,
+    };
+  }
+}
+```
+
+删掉 `oxlint-disable-next-line` 注释并去掉 `examples/todo-app/storage.test.ts` 中 6 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run`，全部 162 条测试都会通过。

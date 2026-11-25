@@ -32,7 +32,6 @@ export type LoadTodosResult = {
  * @param value 待检查的未知值。
  * @returns 是否为普通记录对象。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -43,14 +42,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * @param value 待校验的数组元素。
  * @returns 是否满足 Todo 结构约束。
  */
-// oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-function isValidTodo(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  value: unknown,
-): value is Todo {
+function isValidTodo(value: unknown): value is Todo {
   // 校验普通对象以及 id（正安全整数）、text（string）、completed（boolean）三个字段。
-  // TODO: 实现 isValidTodo
-  return false;
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "number" &&
+    Number.isSafeInteger(value.id) &&
+    value.id > 0 &&
+    typeof value.text === "string" &&
+    typeof value.completed === "boolean"
+  );
 }
 
 /**
@@ -59,13 +60,31 @@ function isValidTodo(
  * @param raw 从存储中读出的原始 JSON 字符串。
  * @returns 有效任务数组与跳过的非法/重复记录数量。
  */
-export function parseTodos(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
-  raw: string,
-): ParseTodosResult {
+export function parseTodos(raw: string): ParseTodosResult {
   // 解析 JSON 并确认根节点是数组，再用 Set<number> 逐项校验与去重（同 id 保留首条合法记录），返回浅拷贝与 skippedCount。
-  // TODO: 实现 parseTodos
-  throw new Error("TODO: 实现 parseTodos");
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) {
+    throw new Error("Stored todos must be an array");
+  }
+
+  const seenIds = new Set<number>();
+  const todos: Todo[] = [];
+  let skippedCount = 0;
+
+  for (const item of parsed) {
+    if (!isValidTodo(item)) {
+      skippedCount += 1;
+      continue;
+    }
+    if (seenIds.has(item.id)) {
+      skippedCount += 1;
+      continue;
+    }
+    seenIds.add(item.id);
+    todos.push({ id: item.id, text: item.text, completed: item.completed });
+  }
+
+  return { todos, skippedCount };
 }
 
 /**
@@ -76,12 +95,34 @@ export function parseTodos(
  * @returns 恢复后的任务列表、降级提示和失败标记。
  */
 export function loadTodosFromStorage(
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   storage: TodoStorage,
-  // oxlint-disable-next-line no-unused-vars -- 完成 TODO 后删除这行
   fallback: readonly Todo[] = INITIAL_TODOS,
 ): LoadTodosResult {
   // 用 try/catch 包裹 storage.read() 与 parseTodos(raw)，区分缺键、完好恢复、部分恢复和整体读失败四种情况。
-  // TODO: 实现 loadTodosFromStorage
-  throw new Error("TODO: 实现 loadTodosFromStorage");
+  try {
+    const raw = storage.read();
+    if (raw === null) {
+      return {
+        todos: fallback.map((todo) => ({ ...todo })),
+        warning: null,
+        loadFailed: false,
+      };
+    }
+
+    const parsed = parseTodos(raw);
+    return {
+      todos: parsed.todos,
+      warning:
+        parsed.skippedCount > 0
+          ? `检测到损坏记录：已恢复 ${parsed.todos.length} 条有效任务，跳过 ${parsed.skippedCount} 条非法或重复项。`
+          : null,
+      loadFailed: false,
+    };
+  } catch {
+    return {
+      todos: fallback.map((todo) => ({ ...todo })),
+      warning: "读取本地存储失败，已回退到默认任务（原存储数据未被覆盖）。",
+      loadFailed: true,
+    };
+  }
 }

@@ -11,7 +11,7 @@ describe("Todo 存储解析与适配", () => {
     window.localStorage.removeItem(DEFAULT_STORAGE_KEY);
   });
 
-  it.skip("parseTodos 解析合法数组并返回新对象拷贝，保留空数组 []", () => {
+  it("parseTodos 解析合法数组并返回新对象拷贝，保留空数组 []", () => {
     expect(parseTodos("[]")).toEqual({ todos: [], skippedCount: 0 });
 
     const result = parseTodos(
@@ -29,13 +29,13 @@ describe("Todo 存储解析与适配", () => {
     });
   });
 
-  it.skip("parseTodos 遇到非法 JSON 或非数组根节点时抛错", () => {
+  it("parseTodos 遇到非法 JSON 或非数组根节点时抛错", () => {
     expect(() => parseTodos("{broken json")).toThrow();
     expect(() => parseTodos('{"id": 1}')).toThrow("Stored todos must be an array");
     expect(() => parseTodos("123")).toThrow("Stored todos must be an array");
   });
 
-  it.skip("parseTodos 逐项校验字段（正安全整数 id、字符串 text、布尔 completed）并跳过非法项", () => {
+  it("parseTodos 逐项校验字段（正安全整数 id、字符串 text、布尔 completed）并跳过非法项", () => {
     const raw = JSON.stringify([
       { id: 1, text: "合法任务", completed: false },
       null,
@@ -57,7 +57,7 @@ describe("Todo 存储解析与适配", () => {
     });
   });
 
-  it.skip("parseTodos 对重复 id 保留首条合法记录并累计 skippedCount", () => {
+  it("parseTodos 对重复 id 保留首条合法记录并累计 skippedCount", () => {
     const raw = JSON.stringify([
       { id: 2, text: 999, completed: false }, // 非法项，不应抢占 id=2
       { id: 2, text: "首条合法记录", completed: false },
@@ -70,7 +70,7 @@ describe("Todo 存储解析与适配", () => {
     });
   });
 
-  it.skip("loadTodosFromStorage 区分缺键、部分损坏与读失败三种场景", () => {
+  it("loadTodosFromStorage 区分缺键、部分损坏与读失败三种场景", () => {
     // 1. 缺键：回退到默认任务，无警告、未失败。
     const emptyStorage = createMemoryTodoStorage({ initialRaw: null });
     expect(loadTodosFromStorage(emptyStorage)).toEqual({
@@ -104,7 +104,7 @@ describe("Todo 存储解析与适配", () => {
     expect(broken.warning).not.toBeNull();
   });
 
-  it.skip("createLocalTodoStorage 通过 window.localStorage 读写指定键", () => {
+  it("createLocalTodoStorage 通过 window.localStorage 读写指定键", () => {
     const storage = createLocalTodoStorage();
     expect(storage.read()).toBeNull();
 
