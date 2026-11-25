@@ -1,0 +1,31 @@
+在 `tools/verify-package.ts` 中依次补齐 `packPackageTarball` 与 `verifyExternalConsumer`：
+
+1. **`packPackageTarball`**：执行 `pnpm pack --pack-destination <outDir>`（自动触发 `package.json` 的 `prepack` 重建 `dist/`），再用 `tar -tzf` 列出压缩包内所有文件并排序返回：
+
+```ts
+export function packPackageTarball(rootDir: string, outDir: string): TarballInspection {
+  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  execFileSync(pnpmBin, ["pack", "--pack-destination", outDir], {
+    cwd: rootDir,
+    stdio: "pipe",
+  });
+
+  const tarballName = readdirSync(outDir).find((name) => name.endsWith(".tgz"));
+  if (!tarballName) {
+    throw new Error(`No .tgz tarball produced in ${outDir}`);
+  }
+  const tarballPath = join(outDir, tarballName);
+  const rawEntries = execFileSync("tar", ["-tzf", tarballPath], { encoding: "utf8" });
+  const entries = rawEntries
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .sort((a, b) => a.localeCompare(b));
+
+  return { tarballPath, entries };
+}
+```
+
+2. **`verifyExternalConsumer`**：在 `mkdtempSync(join(tmpdir(), "nano-solid-consumer-"))` 创建完全独立于本仓库的临时目录，依次写入 `pnpm-workspace.yaml`（开启 `allowBuilds: { esbuild: true }`）、`package.json`（用 `file:<tarballPath>` 依赖刚打出的 `.tgz`，并读取本仓已安装的 `typescript` 与 `vite` 精确版本复用本机安装缓存）、不带 `customConditions` 的标准 `tsconfig.json`、不带 `resolve.conditions` 且从 `"nano-solid/vite"` 引入 `nanoSolid()` 的 `vite.config.ts`、强类型示例组件 `src/main.tsx` 与原生 Node 冒烟脚本 `src/smoke.mjs`。随后用 `installMode` 选择本地的 `--offline` 或 CI 的 `--prefer-offline`，安装后依次运行 `tsc --noEmit`、`vite build` 与 `node src/smoke.mjs`，并在 `finally` 中清理临时目录。
+
+删掉 `oxlint-disable-next-line` 注释，去掉 `src/package-build.test.ts` 中 2 条 10.4 测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run && pnpm run verify:pack`，全部 156 条测试与独立外部项目命令行验收都会通过。

@@ -309,7 +309,7 @@ describe("package.json 条件导出、仓内源码条件与 Todo 迁移", () => 
 });
 
 describe("独立外部项目打包安装验证", () => {
-  it.skip("pnpm pack 保留发布产物、说明和许可证", () => {
+  it("pnpm pack 保留发布产物、说明和许可证", () => {
     const packDir = mkdtempSync(join(tmpdir(), "nano-solid-pack-"));
     try {
       const { entries } = packPackageTarball(ROOT_DIR, packDir);
@@ -339,7 +339,7 @@ describe("独立外部项目打包安装验证", () => {
     }
   });
 
-  it.skip("外部独立项目安装 tarball 后，无需 customConditions 与 resolve.conditions 即可跑通 tsc、Vite 插件构建与 Node 运行时", () => {
+  it("外部独立项目安装 tarball 后，无需 customConditions 与 resolve.conditions 即可跑通 tsc、Vite 插件构建与 Node 运行时", () => {
     const report = verifyExternalConsumer(ROOT_DIR);
 
     // 1. 外部消费者 100% 命中 node_modules/nano-solid/dist/*，且深层未导出路径被拦截。
