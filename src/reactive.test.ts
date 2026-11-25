@@ -1196,7 +1196,7 @@ it("自引用或相互引用的循环 createMemo 会立即抛出循环依赖错�
   expect(seenHealthy).toEqual(["ok", "recovered"]);
 });
 
-it.skip("惰性 createMemo 在首次读取前零次计算，连续写入后只在读取时计算一次", () => {
+it("惰性 createMemo 在首次读取前零次计算，连续写入后只在读取时计算一次", () => {
   const [count, setCount] = createSignal(1);
   const compute = vi.fn(() => count() * 10);
 
@@ -1221,7 +1221,7 @@ it.skip("惰性 createMemo 在首次读取前零次计算，连续写入后只�
   expect(compute).toHaveBeenCalledTimes(2);
 });
 
-it.skip("惰性 createMemo 被活跃 effect 订阅时正常响应更新，effect 释放后恢复零计算直到再次读取", () => {
+it("惰性 createMemo 被活跃 effect 订阅时正常响应更新，effect 释放后恢复零计算直到再次读取", () => {
   const [count, setCount] = createSignal(1);
   const compute = vi.fn(() => `值:${count()}`);
   const lazyText = createMemo(compute, { lazy: true });
@@ -1252,7 +1252,7 @@ it.skip("惰性 createMemo 被活跃 effect 订阅时正常响应更新，effect
   expect(compute).toHaveBeenCalledTimes(3);
 });
 
-it.skip("链式惰性 createMemo 同样支持三态 CHECK 与 Object.is 同值截断", () => {
+it("链式惰性 createMemo 同样支持三态 CHECK 与 Object.is 同值截断", () => {
   const [count, setCount] = createSignal(1);
   const computeSign = vi.fn(() => (count() > 0 ? "positive" : "non-positive"));
   const computeLabel = vi.fn(() => `状态:${sign()}`);
@@ -1281,7 +1281,7 @@ it.skip("链式惰性 createMemo 同样支持三态 CHECK 与 Object.is 同值�
   expect(computeLabel).toHaveBeenCalledTimes(2);
 });
 
-it.skip("惰性 createMemo 首次读取抛错时会清理半截订阅，后续再读抛出已释放错误", () => {
+it("惰性 createMemo 首次读取抛错时会清理半截订阅，后续再读抛出已释放错误", () => {
   const [count, setCount] = createSignal(0);
   const compute = vi.fn(() => {
     count();
@@ -1302,7 +1302,7 @@ it.skip("惰性 createMemo 首次读取抛错时会清理半截订阅，后续�
   );
 });
 
-it.skip("已求值后释放的惰性 memo 保留最后缓存，首次读取前就被释放的惰性 memo 抛出明确错误", () => {
+it("已求值后释放的惰性 memo 保留最后缓存，首次读取前就被释放的惰性 memo 抛出明确错误", () => {
   const [count, setCount] = createSignal(1);
 
   // 场景 1：已经读过一次再释放，继续返回最后一次缓存。

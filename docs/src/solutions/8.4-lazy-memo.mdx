@@ -1,0 +1,43 @@
+先在 `src/reactive.ts` 的 `markCheck` 与 `markDirty` 中把加入 `pendingMemos` 的动作收敛到急切模式，让惰性 memo 在 Push 阶段只记录状态、继续向下游传递 `check`，无人订阅时不白算：
+
+```ts
+// markCheck 与 markDirty 中均改为：
+if (computation.eager) {
+  pendingMemos.add(computation);
+}
+```
+
+接着在 `createMemo` 中按 `memo.eager` 决定是否在创建时立即求值，并在 `get()` 入口拦截“首次求值前就已被释放”的惰性 memo：
+
+```ts
+if (memo.eager) {
+  updateMemo(memo);
+}
+
+return function get(): T {
+  if (memo.disposed && !memo.initialized) {
+    throw new Error("Cannot read a lazy memo that was disposed before its first evaluation");
+  }
+  updateMemo(memo);
+  track(memo);
+  return memo.value as T;
+};
+```
+
+然后在 `examples/todo-app/App.tsx` 中新增 `showCompletedDetails` 状态与 `{ lazy: true }` 的 `completedDetails` 派生，并在底部统计栏下方挂上折叠开关 `#toggle-completed-details` 和 `<Show when={showCompletedDetails}>` 明细区域：
+
+```tsx
+const [showCompletedDetails, setShowCompletedDetails] = createSignal(false);
+
+const completedDetails = createMemo(
+  () => {
+    const done = todos().filter((todo) => todo.completed);
+    return done.length === 0
+      ? "暂无已完成任务。"
+      : `已完成明细：${done.map((todo) => todo.text).join("、")}`;
+  },
+  { lazy: true },
+);
+```
+
+最后去掉 `src/reactive.test.ts` 与 `examples/todo-app/App.test.tsx` 中 6 条测试的 `.skip`，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，全部 117 条测试都会通过。

@@ -123,8 +123,9 @@ function markCheck(computation: Computation): void {
   if (computation.state !== "clean") return;
   computation.state = "check";
   // 仅当急切 memo（eager === true）时才加入 pendingMemos；惰性 memo 只保留 check 标记，等读取或下游 effect 拉取。
-  // TODO: 改为仅在 computation.eager 为 true 时加入 pendingMemos。
-  pendingMemos.add(computation);
+  if (computation.eager) {
+    pendingMemos.add(computation);
+  }
   for (const child of computation.subscribers) {
     markCheck(child);
   }
@@ -149,8 +150,9 @@ function markDirty(computation: Computation): void {
     }
   }
   // 仅当急切 memo（eager === true）时才加入 pendingMemos；惰性 memo 无人订阅时不白算。
-  // TODO: 改为仅在 computation.eager 为 true 时加入 pendingMemos。
-  pendingMemos.add(computation);
+  if (computation.eager) {
+    pendingMemos.add(computation);
+  }
 }
 
 /**
@@ -542,12 +544,15 @@ export function createMemo<T>(compute: () => T, options?: MemoOptions): () => T 
   }
 
   // 急切模式在创建时立即计算首版缓存，惰性模式跳过首次计算等待按需拉取。
-  // TODO: 改为仅在 memo.eager 为 true 时调用 updateMemo(memo)。
-  updateMemo(memo);
+  if (memo.eager) {
+    updateMemo(memo);
+  }
 
   return function get(): T {
     // 惰性 memo 若在首次求值前已被释放，显式抛错避免返回伪造的 undefined；已求值后释放则返回最后一次缓存。
-    // TODO: 检查 memo.disposed && !memo.initialized，满足时抛出 Error("Cannot read a lazy memo that was disposed before its first evaluation")。
+    if (memo.disposed && !memo.initialized) {
+      throw new Error("Cannot read a lazy memo that was disposed before its first evaluation");
+    }
     // 先按需刷新确保 memo.value 与 memo.version 为最新一致状态，再向当前外层计算登记订阅。
     updateMemo(memo);
     track(memo);

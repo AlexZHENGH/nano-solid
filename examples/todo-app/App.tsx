@@ -29,6 +29,7 @@ export function App(): Node {
   const [draft, setDraft] = createSignal("");
   const [editingId, setEditingId] = createSignal<number | null>(null);
   const [editDraft, setEditDraft] = createSignal("");
+  const [showCompletedDetails, setShowCompletedDetails] = createSignal(false);
 
   let nextId = INITIAL_TODOS.length + 1;
   let composerInput: HTMLInputElement | undefined;
@@ -45,6 +46,17 @@ export function App(): Node {
   // 未完成条数经 Object.is 同值截断：仅修改文案时不唤醒状态徽章；已完成条数进一步链式派生。
   const remainingCount = createMemo(() => todos().filter((todo) => !todo.completed).length);
   const completedCount = createMemo(() => todos().length - remainingCount());
+
+  // 折叠明细默认关闭时无人订阅：使用惰性 memo，仅在展开查看或展开期间有变动时才按需计算。
+  const completedDetails = createMemo(
+    () => {
+      const done = todos().filter((todo) => todo.completed);
+      return done.length === 0
+        ? "暂无已完成任务。"
+        : `已完成明细：${done.map((todo) => todo.text).join("、")}`;
+    },
+    { lazy: true },
+  );
 
   /** 添加一条新任务，清空草稿并把焦点放回新建输入框。 */
   const addTodo = () => {
@@ -248,6 +260,26 @@ export function App(): Node {
         <code>{() => visibleTodos().length}</code> 项，已完成 <code>{() => completedCount()}</code>{" "}
         项
       </p>
+
+      {/* 按需展开的已完成任务明细：折叠时 completedDetails 处于休眠态零重算，展开后自动同步。 */}
+      <hr class="ns-divider" />
+      <div class="ns-actions">
+        <button
+          id="toggle-completed-details"
+          type="button"
+          class="ns-btn ns-btn-sm"
+          onClick={() => setShowCompletedDetails(!showCompletedDetails())}
+        >
+          {() => (showCompletedDetails() ? "收起已完成明细" : "查看已完成明细")}
+        </button>
+      </div>
+      <Show when={showCompletedDetails}>
+        {() => (
+          <p id="completed-details" class="ns-meta">
+            {() => completedDetails()}
+          </p>
+        )}
+      </Show>
     </section>
   );
 }

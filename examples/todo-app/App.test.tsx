@@ -137,7 +137,7 @@ describe("Todo 示例应用", () => {
     expect(container.childNodes.length).toBe(0);
   });
 
-  it.skip("通过惰性 createMemo 按需展开已完成任务明细并在展开期间保持同步", () => {
+  it("通过惰性 createMemo 按需展开已完成任务明细并在展开期间保持同步", () => {
     const container = document.createElement("div");
     const unmount = render(() => <App />, container);
 
