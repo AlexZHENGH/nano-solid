@@ -4,6 +4,12 @@ export type EffectCallback = () => void;
 /** 用于停止一个作用域或 effect 订阅并释放依赖的清理函数。 */
 export type Dispose = () => void;
 
+/** createMemo 的可选配置项。 */
+export type MemoOptions = {
+  /** 是否延迟到首次读取（或被下游 effect 拉取）时才计算；默认为 false（创建时立即求值）。 */
+  lazy?: boolean;
+};
+
 /**
  * 内部维护的所有权节点：记录所属父节点、下属子作用域、清理回调列表、释放状态以及自身收尾钩子。
  */
@@ -50,6 +56,7 @@ type Memo<T = unknown> = ComputationBase &
     value: T | undefined;
     initialized: boolean;
     state: MemoState;
+    eager: boolean;
   };
 
 /** 响应式依赖图中的计算节点联合类型。 */
@@ -107,7 +114,7 @@ function track(source: Source): void {
  * @param computation 收到上游“可能变化”信号的下游计算节点。
  */
 function markCheck(computation: Computation): void {
-  // 已释放直接跳过；effect 加入 pendingEffects；仅当 memo 当前为 clean 时置为 check、入队 pendingMemos 并递归通知其下游。
+  // 已释放直接跳过；effect 加入 pendingEffects；仅当 memo 当前为 clean 时置为 check，若为急切 memo 才入队 pendingMemos，再递归通知下游。
   if (computation.disposed) return;
   if (computation.kind === "effect") {
     pendingEffects.add(computation);
@@ -115,6 +122,8 @@ function markCheck(computation: Computation): void {
   }
   if (computation.state !== "clean") return;
   computation.state = "check";
+  // 仅当急切 memo（eager === true）时才加入 pendingMemos；惰性 memo 只保留 check 标记，等读取或下游 effect 拉取。
+  // TODO: 改为仅在 computation.eager 为 true 时加入 pendingMemos。
   pendingMemos.add(computation);
   for (const child of computation.subscribers) {
     markCheck(child);
@@ -127,7 +136,7 @@ function markCheck(computation: Computation): void {
  * @param computation 直接订阅了已变化 signal 的计算节点。
  */
 function markDirty(computation: Computation): void {
-  // 已释放直接跳过；effect 加入 pendingEffects；memo 若还不是 dirty 则置为 dirty 并对其下游调用 markCheck，同时入队 pendingMemos。
+  // 已释放直接跳过；effect 加入 pendingEffects；memo 若还不是 dirty 则置为 dirty 并对其下游调用 markCheck，仅急切 memo 入队 pendingMemos。
   if (computation.disposed) return;
   if (computation.kind === "effect") {
     pendingEffects.add(computation);
@@ -139,6 +148,8 @@ function markDirty(computation: Computation): void {
       markCheck(child);
     }
   }
+  // 仅当急切 memo（eager === true）时才加入 pendingMemos；惰性 memo 无人订阅时不白算。
+  // TODO: 改为仅在 computation.eager 为 true 时加入 pendingMemos。
   pendingMemos.add(computation);
 }
 
@@ -496,12 +507,13 @@ export function createEffect(callback: EffectCallback): Dispose {
 }
 
 /**
- * 创建一个三态 Push-Pull 派生节点：写入时仅标脏，读取或刷新下游时按需核对上游版本并缓存结果，仅当新旧值按 Object.is 不同时递增版本号，并随当前 Owner 自动释放。
+ * 创建一个三态 Push-Pull 派生节点：写入时仅标脏，读取或刷新下游时按需核对上游版本并缓存结果，仅当新旧值按 Object.is 不同时递增版本号，并随当前 Owner 自动释放；传入 { lazy: true } 可延迟到首次读取时才求值。
  *
  * @param compute 读取上游 signal 或 memo 并返回派生结果的纯计算函数。
+ * @param options 可选配置，设置 lazy: true 开启按需惰性求值。
  * @returns 读取当前最新一致缓存值的 getter（在计算节点内读取时会订阅该派生节点）。
  */
-export function createMemo<T>(compute: () => T): () => T {
+export function createMemo<T>(compute: () => T, options?: MemoOptions): () => T {
   const memo: Memo<T> = {
     kind: "memo",
     parent: currentOwner,
@@ -516,6 +528,7 @@ export function createMemo<T>(compute: () => T): () => T {
     value: undefined,
     initialized: false,
     state: "dirty",
+    eager: !(options?.lazy ?? false),
   };
   memo.onDispose = () => {
     cleanupDependencies(memo);
@@ -528,10 +541,13 @@ export function createMemo<T>(compute: () => T): () => T {
     currentOwner.children.add(memo);
   }
 
-  // 默认急切求值：创建时立即计算首版缓存，确保初始化抛错第一时间暴露。
+  // 急切模式在创建时立即计算首版缓存，惰性模式跳过首次计算等待按需拉取。
+  // TODO: 改为仅在 memo.eager 为 true 时调用 updateMemo(memo)。
   updateMemo(memo);
 
   return function get(): T {
+    // 惰性 memo 若在首次求值前已被释放，显式抛错避免返回伪造的 undefined；已求值后释放则返回最后一次缓存。
+    // TODO: 检查 memo.disposed && !memo.initialized，满足时抛出 Error("Cannot read a lazy memo that was disposed before its first evaluation")。
     // 先按需刷新确保 memo.value 与 memo.version 为最新一致状态，再向当前外层计算登记订阅。
     updateMemo(memo);
     track(memo);

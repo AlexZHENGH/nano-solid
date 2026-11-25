@@ -136,4 +136,40 @@ describe("Todo 示例应用", () => {
     unmount();
     expect(container.childNodes.length).toBe(0);
   });
+
+  it.skip("通过惰性 createMemo 按需展开已完成任务明细并在展开期间保持同步", () => {
+    const container = document.createElement("div");
+    const unmount = render(() => <App />, container);
+
+    const toggleButton = container.querySelector<HTMLButtonElement>("#toggle-completed-details")!;
+    expect(toggleButton.textContent).toBe("查看已完成明细");
+    expect(container.querySelector("#completed-details")).toBeNull();
+
+    // 折叠状态下先勾选第 2 条任务为已完成，展开后应一次算出最新明细。
+    const secondCheckbox = container
+      .querySelector<HTMLLIElement>("#todo-2")!
+      .querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    secondCheckbox.checked = true;
+    secondCheckbox.dispatchEvent(new Event("change"));
+
+    toggleButton.click();
+    expect(toggleButton.textContent).toBe("收起已完成明细");
+    expect(container.querySelector("#completed-details")?.textContent).toContain(
+      "实现 createMemo 派生缓存、实现按 key 复用的 For 列表",
+    );
+
+    // 展开期间取消勾选第 1 条任务，明细应同步更新。
+    const firstCheckbox = container
+      .querySelector<HTMLLIElement>("#todo-1")!
+      .querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    firstCheckbox.checked = false;
+    firstCheckbox.dispatchEvent(new Event("change"));
+    expect(container.querySelector("#completed-details")?.textContent).toBe(
+      "已完成明细：实现按 key 复用的 For 列表",
+    );
+
+    toggleButton.click();
+    expect(container.querySelector("#completed-details")).toBeNull();
+    unmount();
+  });
 });

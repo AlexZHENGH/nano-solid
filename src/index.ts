@@ -9,6 +9,7 @@ export {
   untrack,
   type Dispose,
   type EffectCallback,
+  type MemoOptions,
 } from "./reactive.ts";
 export { render, type ElementProps, type TargetedEvent } from "./dom.ts";
 export { For, Show, type ForProps, type ShowProps } from "./control-flow.ts";

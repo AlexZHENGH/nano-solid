@@ -1196,6 +1196,136 @@ it("自引用或相互引用的循环 createMemo 会立即抛出循环依赖错�
   expect(seenHealthy).toEqual(["ok", "recovered"]);
 });
 
+it.skip("惰性 createMemo 在首次读取前零次计算，连续写入后只在读取时计算一次", () => {
+  const [count, setCount] = createSignal(1);
+  const compute = vi.fn(() => count() * 10);
+
+  const lazyDoubled = createMemo(compute, { lazy: true });
+  expect(compute).toHaveBeenCalledTimes(0);
+
+  // 未被读取前连续修改上游，不应触发任何计算。
+  setCount(2);
+  setCount(3);
+  expect(compute).toHaveBeenCalledTimes(0);
+
+  // 首次读取才按最新状态计算一次，后续连续读取直接命中缓存。
+  expect(lazyDoubled()).toBe(30);
+  expect(lazyDoubled()).toBe(30);
+  expect(compute).toHaveBeenCalledTimes(1);
+
+  // 无人订阅时再次连续修改上游，依然推迟到下次读取才重算一次。
+  setCount(4);
+  setCount(5);
+  expect(compute).toHaveBeenCalledTimes(1);
+  expect(lazyDoubled()).toBe(50);
+  expect(compute).toHaveBeenCalledTimes(2);
+});
+
+it.skip("惰性 createMemo 被活跃 effect 订阅时正常响应更新，effect 释放后恢复零计算直到再次读取", () => {
+  const [count, setCount] = createSignal(1);
+  const compute = vi.fn(() => `值:${count()}`);
+  const lazyText = createMemo(compute, { lazy: true });
+  const seen: string[] = [];
+
+  expect(compute).toHaveBeenCalledTimes(0);
+
+  // 模拟展开面板：挂载订阅该惰性 memo 的 effect。
+  const disposePanel = createEffect(() => {
+    seen.push(lazyText());
+  });
+  expect(seen).toEqual(["值:1"]);
+  expect(compute).toHaveBeenCalledTimes(1);
+
+  // 面板展开期间修改上游，下游 effect 按需拉取新值。
+  setCount(2);
+  expect(seen).toEqual(["值:1", "值:2"]);
+  expect(compute).toHaveBeenCalledTimes(2);
+
+  // 模拟收起面板：释放 effect 后，上游继续修改不再触发计算。
+  disposePanel();
+  setCount(3);
+  setCount(4);
+  expect(compute).toHaveBeenCalledTimes(2);
+
+  // 再次读取时立刻拉取最新结果。
+  expect(lazyText()).toBe("值:4");
+  expect(compute).toHaveBeenCalledTimes(3);
+});
+
+it.skip("链式惰性 createMemo 同样支持三态 CHECK 与 Object.is 同值截断", () => {
+  const [count, setCount] = createSignal(1);
+  const computeSign = vi.fn(() => (count() > 0 ? "positive" : "non-positive"));
+  const computeLabel = vi.fn(() => `状态:${sign()}`);
+
+  const sign = createMemo(computeSign, { lazy: true });
+  const label = createMemo(computeLabel, { lazy: true });
+
+  expect(computeSign).toHaveBeenCalledTimes(0);
+  expect(computeLabel).toHaveBeenCalledTimes(0);
+
+  expect(label()).toBe("状态:positive");
+  expect(computeSign).toHaveBeenCalledTimes(1);
+  expect(computeLabel).toHaveBeenCalledTimes(1);
+
+  // 1 -> 2：sign 重算后仍为 "positive"，下游 label 经 CHECK 校验跳过重算。
+  setCount(2);
+  expect(computeSign).toHaveBeenCalledTimes(1);
+  expect(label()).toBe("状态:positive");
+  expect(computeSign).toHaveBeenCalledTimes(2);
+  expect(computeLabel).toHaveBeenCalledTimes(1);
+
+  // 2 -> 0：sign 结果变化，label 随之重算。
+  setCount(0);
+  expect(label()).toBe("状态:non-positive");
+  expect(computeSign).toHaveBeenCalledTimes(3);
+  expect(computeLabel).toHaveBeenCalledTimes(2);
+});
+
+it.skip("惰性 createMemo 首次读取抛错时会清理半截订阅，后续再读抛出已释放错误", () => {
+  const [count, setCount] = createSignal(0);
+  const compute = vi.fn(() => {
+    count();
+    throw new Error("lazy boom");
+  });
+
+  const lazyBroken = createMemo(compute, { lazy: true });
+  expect(compute).toHaveBeenCalledTimes(0);
+
+  expect(() => lazyBroken()).toThrow("lazy boom");
+  expect(compute).toHaveBeenCalledTimes(1);
+
+  // 首次求值失败后已释放：上游再变不再执行，再次读取显式报错。
+  setCount(1);
+  expect(compute).toHaveBeenCalledTimes(1);
+  expect(() => lazyBroken()).toThrow(
+    "Cannot read a lazy memo that was disposed before its first evaluation",
+  );
+});
+
+it.skip("已求值后释放的惰性 memo 保留最后缓存，首次读取前就被释放的惰性 memo 抛出明确错误", () => {
+  const [count, setCount] = createSignal(1);
+
+  // 场景 1：已经读过一次再释放，继续返回最后一次缓存。
+  const evaluated = createRoot((dispose) => ({
+    memo: createMemo(() => count() * 2, { lazy: true }),
+    dispose,
+  }));
+  expect(evaluated.memo()).toBe(2);
+  evaluated.dispose();
+  setCount(5);
+  expect(evaluated.memo()).toBe(2);
+
+  // 场景 2：一次都没读过就被父作用域释放，再读时抛出明确错误。
+  const unevaluated = createRoot((dispose) => ({
+    memo: createMemo(() => count() * 2, { lazy: true }),
+    dispose,
+  }));
+  unevaluated.dispose();
+  expect(() => unevaluated.memo()).toThrow(
+    "Cannot read a lazy memo that was disposed before its first evaluation",
+  );
+});
+
 it("清理回调抛错时仍释放兄弟 effect 和父作用域", () => {
   const [count, setCount] = createSignal(0);
   const observed = vi.fn();
