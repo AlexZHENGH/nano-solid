@@ -1,0 +1,97 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "10.2 配置 exports、仓内源码条件与迁移 Todo"
+description: "编写 package.json 条件 exports 白名单，用仓内自定义条件 nano-solid-source 兼顾零构建 Vite HMR 与外部 dist 消费，并将 Todo 与编译器全面迁移至正式包名 nano-solid。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+上一节 [10.1](../10.1-library-build/) 已经把干净的库产物和 `.d.ts` 输出到了 `dist/`。但此刻 `examples/todo-app` 还在用仓内私有的 `#nano-solid`，编译器默认注入的也还是 `#nano-solid/compiler-runtime`。
+
+这一节我们正式启用 `package.json` 的 `"exports"` 白名单，彻底告别临时过渡用的 `#nano-solid`，同时解开库作者最常头疼的工程矛盾：**怎么在对外只发布 `dist/` 的同时，让仓内开发依然享受 Vite 零构建实时热更新（HMR）？**
+
+## 1. 为什么条件 `"exports"` 的顺序决定成败？
+
+在现代 Node ESM、TypeScript 和 Vite 里，`package.json` 的 `"exports"` 有两重职责：**对外声明白名单**（未列出的内部路径一律报错 `ERR_PACKAGE_PATH_NOT_EXPORTED`），以及**按环境条件分派目标文件**。
+
+我们为 `nano-solid` 声明 5 个正式子路径，每个入口长这样：
+
+```json
+{
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "nano-solid-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./jsx-runtime": {
+      "nano-solid-source": "./src/jsx-runtime.ts",
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "nano-solid-source": "./src/jsx-runtime.ts",
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./compiler-runtime": {
+      "nano-solid-source": "./src/compiler-runtime.ts",
+      "types": "./dist/compiler-runtime.d.ts",
+      "default": "./dist/compiler-runtime.js"
+    },
+    "./vite": {
+      "nano-solid-source": "./src/vite.ts",
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    }
+  }
+}
+```
+
+这里有三个必须搞懂的 know-why：
+
+1. **为什么 `"types"` 必须写在 `"default"` 前面？**
+   Node 与 TypeScript 解析 `"exports"` 对象时都是**严格按 JSON 键顺序从上往下匹配第一个命中的条件**。如果把 `"default"` 放在 `"types"` 前面，TypeScript 会先命中 `"default"` 的 `.js` 文件，根本走不到后面的 `"types"`！
+2. **为什么 `"files": ["dist"]` 不会把 `"nano-solid-source"` 泄露给外部用户？**
+   外部用户安装的是通过 `files: ["dist"]` 打包后的 tarball，根本不会开启 `"nano-solid-source"` 这个仓内私有条件，Node、Vite 和 TypeScript 会直接跳过第一项，100% 命中 `"types": "./dist/*.d.ts"` 与 `"default": "./dist/*.js"`。
+3. **为什么把 `vite` 写成可选 `peerDependencies`？**
+   `src/vite.ts` 用到了 `vite` 的类型与插件契约，但如果把 `vite` 写进 `dependencies`，只用 `nano-solid` 核心响应式或自己用其他打包器的用户就会被迫多装一套 Vite；而把它声明为 `peerDependencies` + `peerDependenciesMeta.vite.optional = true`，既表明兼容 Vite 7，又不会强迫非 Vite 用户安装。
+
+## 2. 仓内零构建 Vite HMR：`customConditions` 与 `defaultClientConditions`
+
+现在看本仓库内部开发时的体验：如果每次改一行 `src/reactive.ts`，都必须先运行 `pnpm build:lib` 重新生成 `dist/`，Todo 页面才能热更新，开发效率会非常糟糕。
+
+借助上面排在第一位的 `"nano-solid-source"` 条件，我们只需在本仓的两个配置文件里显式开启它：
+
+- **`tsconfig.json`**：把 `"jsxImportSource"` 改为 `"nano-solid"`，并加上 `"customConditions": ["nano-solid-source"]`。编辑器和 `pnpm typecheck` 解析 `"nano-solid"` 时就会直接命中 `./src/*.ts`，改完源码瞬间看到类型反馈，不需要先构建 `dist/`；
+- **`vite.config.ts`**：配置 `resolve.conditions` 时**千万不要**只写 `conditions: ["nano-solid-source"]`！
+
+> [!WARNING]
+> **Vite 6 / 7 常见踩坑：单独设置 `resolve.conditions` 会覆盖默认条件！**
+>
+> 在 Vite 6 和 Vite 7 中，`resolve.conditions` 不会自动合并默认条件，如果只写 `["nano-solid-source"]`，会丢掉 `"browser"`、`"module"`、`"development|production"` 等内置条件，导致部分第三方依赖解析异常。正确写法是从 `"vite"` 导入 `defaultClientConditions` 并展开：`conditions: ["nano-solid-source", ...defaultClientConditions]`。
+
+还有一个巧妙的细节：**为什么 `vite.config.ts` 自己依然写 `import { nanoSolid } from "./src/vite.ts"`，而不是 `from "nano-solid/vite"`？**
+
+因为加载 `vite.config.ts` 时，这份配置还没执行完，`resolve.conditions` 尚未生效！此时如果 `vite.config.ts` 写 `"nano-solid/vite"`，Node 会按默认条件去读 `./dist/vite.js`，一个刚拉下仓库、还没跑过 `pnpm build:lib` 的开发者执行 `pnpm dev` 或 `pnpm test:run` 就会立刻报错。配置文件自身保留 `./src/vite.ts`，才能保证全仓任何时候都能真正“零构建启动”。
+
+## 3. 全仓告别 `#nano-solid`
+
+配置就绪后，剩下的迁移非常干净：
+
+1. 删除 `package.json` 中的过渡字段 `"imports"`（`#nano-solid/*`）；
+2. 将 `src/compiler/transform.ts` 的 `DEFAULT_RUNTIME_MODULE` 改为 `"nano-solid/compiler-runtime"`（同步更新 `src/compiler/transform.test.ts` 与 `src/compiler/vite-plugin.test.ts` 中的模块名断言）；
+3. 将 `examples/todo-app/App.tsx`、`examples/todo-app/main.tsx` 与 `examples/todo-app/App.test.tsx` 的导入路径统一改为 `"nano-solid"`。
+
+从此以后，我们自己的 Todo 示例应用和外部用户写的代码在导入写法上 100% 一致，真正实现“自己吃自己的狗粮（dogfooding）”。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/10.2 10.2-learn
+> ```
+>
+> 本节在 `src/package-build.test.ts` 新增了 4 条 `it.skip` 测试，覆盖 `package.json` 的 `exports` / `files` / `peerDependencies` 顺序契约、原生 Node 24 包自引用与 `ERR_PACKAGE_PATH_NOT_EXPORTED` 拦截、仓内 `nano-solid-source` 条件配置以及 Todo 全面迁移校验。按正文步骤完成五处配置与导入迁移后，运行 `pnpm format && pnpm check && pnpm test:run && pnpm build`，确认全部 149 条测试与双构建全部通过。
+
+<LessonSolution slug="10.2-package-exports" tag="10.2-solution" />

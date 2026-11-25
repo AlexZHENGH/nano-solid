@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, expectTypeOf, it } from "vitest";
+import { transformJSX } from "./compiler/transform.ts";
 import type { Dispose, ForProps, JSXChild, MemoOptions, ShowProps } from "./index.ts";
 import { batch, createMemo, createRoot, createSignal, render, untrack } from "./index.ts";
 import type { JSX } from "./jsx-runtime.ts";
@@ -10,6 +11,12 @@ import { nanoSolid, type NanoSolidPluginOptions } from "./vite.ts";
 
 const ROOT_DIR = process.cwd();
 const DIST_DIR = resolve(ROOT_DIR, "dist");
+
+/** 去除 JSONC 单行注释，便于测试读取带教学注释的 tsconfig.json。 */
+function parseJsonc(raw: string): Record<string, unknown> {
+  const withoutComments = raw.replace(/^\s*\/\/.*$/gm, "");
+  return JSON.parse(withoutComments) as Record<string, unknown>;
+}
 
 /** 递归收集目录下所有文件的相对路径（统一转为正斜杠），便于检查 dist 产物纯净度。 */
 function listRelativeFiles(dir: string, prefix = ""): string[] {
@@ -160,5 +167,141 @@ describe("库产物构建与类型声明契约", () => {
 
     // Vite 插件入口类型契约。
     expectTypeOf(nanoSolid).parameter(0).toEqualTypeOf<NanoSolidPluginOptions | undefined>();
+  });
+});
+
+describe("package.json 条件导出、仓内源码条件与 Todo 迁移", () => {
+  it.skip("package.json 声明 files、5 个正式 exports 子路径且每个入口满足 nano-solid-source -> types -> default 顺序", () => {
+    const pkg = JSON.parse(readFileSync(resolve(ROOT_DIR, "package.json"), "utf8")) as {
+      files?: string[];
+      imports?: Record<string, unknown>;
+      exports?: Record<string, Record<string, string>>;
+      peerDependencies?: Record<string, string>;
+      peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+    };
+
+    // 1. 发布白名单只包含 dist，且不再残留旧的仓内私有 #nano-solid 映射。
+    expect(pkg.files).toEqual(["dist"]);
+    expect(pkg.imports).toBeUndefined();
+
+    // 2. vite 声明为可选 peerDependency，不强迫仅使用核心运行时的用户安装 Vite。
+    expect(pkg.peerDependencies?.vite).toBeDefined();
+    expect(pkg.peerDependenciesMeta?.vite?.optional).toBe(true);
+
+    // 3. 校验全部 5 个对外子路径映射及条件键顺序（types 必须在 default 之前）。
+    const expectedSubpaths: Array<[string, string, string, string]> = [
+      [".", "./src/index.ts", "./dist/index.d.ts", "./dist/index.js"],
+      ["./jsx-runtime", "./src/jsx-runtime.ts", "./dist/jsx-runtime.d.ts", "./dist/jsx-runtime.js"],
+      [
+        "./jsx-dev-runtime",
+        "./src/jsx-runtime.ts",
+        "./dist/jsx-runtime.d.ts",
+        "./dist/jsx-runtime.js",
+      ],
+      [
+        "./compiler-runtime",
+        "./src/compiler-runtime.ts",
+        "./dist/compiler-runtime.d.ts",
+        "./dist/compiler-runtime.js",
+      ],
+      ["./vite", "./src/vite.ts", "./dist/vite.d.ts", "./dist/vite.js"],
+    ];
+
+    expect(Object.keys(pkg.exports ?? {})).toEqual(expectedSubpaths.map(([subpath]) => subpath));
+
+    for (const [subpath, sourcePath, typesPath, defaultPath] of expectedSubpaths) {
+      const entry = pkg.exports?.[subpath];
+      expect(entry).toEqual({
+        "nano-solid-source": sourcePath,
+        types: typesPath,
+        default: defaultPath,
+      });
+      // 条件键顺序决定解析优先级：types 必须排在 default 之前。
+      expect(Object.keys(entry ?? {})).toEqual(["nano-solid-source", "types", "default"]);
+    }
+  });
+
+  it.skip("原生 Node 24 默认条件下通过包名自引用命中 dist/ 产物，并拦截未导出的深层内部路径", () => {
+    buildLibrary();
+
+    // 在干净的原生 Node 进程（不开启 nano-solid-source 条件）中校验全部公开子路径与越界拦截。
+    const probeScript = `
+      const resolved = {
+        root: import.meta.resolve("nano-solid"),
+        jsxRuntime: import.meta.resolve("nano-solid/jsx-runtime"),
+        jsxDevRuntime: import.meta.resolve("nano-solid/jsx-dev-runtime"),
+        compilerRuntime: import.meta.resolve("nano-solid/compiler-runtime"),
+        vite: import.meta.resolve("nano-solid/vite"),
+      };
+      const core = await import("nano-solid");
+      const [n, setN] = core.createSignal(1);
+      setN(2);
+      let blockedDistCode = "";
+      let blockedSrcCode = "";
+      try {
+        await import("nano-solid/dist/reactive.js");
+      } catch (err) {
+        blockedDistCode = err.code ?? String(err);
+      }
+      try {
+        await import("nano-solid/src/reactive.ts");
+      } catch (err) {
+        blockedSrcCode = err.code ?? String(err);
+      }
+      console.log(JSON.stringify({ resolved, value: n(), blockedDistCode, blockedSrcCode }));
+    `;
+
+    const stdout = execFileSync(process.execPath, ["--input-type=module", "-e", probeScript], {
+      cwd: ROOT_DIR,
+      encoding: "utf8",
+    });
+    const report = JSON.parse(stdout) as {
+      resolved: Record<string, string>;
+      value: number;
+      blockedDistCode: string;
+      blockedSrcCode: string;
+    };
+
+    expect(report.resolved.root?.endsWith("/dist/index.js")).toBe(true);
+    expect(report.resolved.jsxRuntime?.endsWith("/dist/jsx-runtime.js")).toBe(true);
+    expect(report.resolved.jsxDevRuntime?.endsWith("/dist/jsx-runtime.js")).toBe(true);
+    expect(report.resolved.compilerRuntime?.endsWith("/dist/compiler-runtime.js")).toBe(true);
+    expect(report.resolved.vite?.endsWith("/dist/vite.js")).toBe(true);
+    expect(report.value).toBe(2);
+    expect(report.blockedDistCode).toBe("ERR_PACKAGE_PATH_NOT_EXPORTED");
+    expect(report.blockedSrcCode).toBe("ERR_PACKAGE_PATH_NOT_EXPORTED");
+  });
+
+  it.skip("仓内配置已启用 nano-solid-source 条件，且编译器默认注入 nano-solid/compiler-runtime", () => {
+    const tsconfig = parseJsonc(readFileSync(resolve(ROOT_DIR, "tsconfig.json"), "utf8")) as {
+      compilerOptions?: {
+        jsxImportSource?: string;
+        customConditions?: string[];
+      };
+    };
+    expect(tsconfig.compilerOptions?.jsxImportSource).toBe("nano-solid");
+    expect(tsconfig.compilerOptions?.customConditions).toContain("nano-solid-source");
+
+    const viteConfig = readFileSync(resolve(ROOT_DIR, "vite.config.ts"), "utf8");
+    expect(viteConfig).toContain("nano-solid-source");
+    expect(viteConfig).toContain("defaultClientConditions");
+
+    const compiled = transformJSX("const el = <p>{() => count()}</p>;");
+    expect(compiled).not.toBeNull();
+    expect(compiled!.code).toContain('from "nano-solid/compiler-runtime"');
+    expect(compiled!.code).not.toContain("#nano-solid");
+  });
+
+  it.skip("examples/todo-app 已全面迁移到正式包名 nano-solid，不再残留 #nano-solid", () => {
+    const todoFiles = [
+      "examples/todo-app/App.tsx",
+      "examples/todo-app/main.tsx",
+      "examples/todo-app/App.test.tsx",
+    ];
+    for (const relPath of todoFiles) {
+      const content = readFileSync(resolve(ROOT_DIR, relPath), "utf8");
+      expect(content).toContain('from "nano-solid"');
+      expect(content).not.toContain("#nano-solid");
+    }
   });
 });
