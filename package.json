@@ -26,6 +26,12 @@
     "tags:refresh": "node scripts/refresh_tags.ts --refresh",
     "test:run": "vitest run"
   },
+  "dependencies": {
+    "@babel/generator": "^8.1.3",
+    "@babel/parser": "^8.1.3",
+    "@babel/traverse": "^8.1.3",
+    "@babel/types": "^8.1.3"
+  },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "jsdom": "^31.0.1",

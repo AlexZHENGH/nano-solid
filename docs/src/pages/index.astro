@@ -36,6 +36,7 @@ import { frontmatter as diamondUntrack } from "./lessons/8.2-diamond-and-untrack
 import { frontmatter as reentrancyCycles } from "./lessons/8.3-reentrancy-and-cycles.mdx";
 import { frontmatter as lazyMemo } from "./lessons/8.4-lazy-memo.mdx";
 import { frontmatter as jsxCompiler } from "./lessons/9.0-jsx-compiler.mdx";
+import { frontmatter as staticJsxCompiler } from "./lessons/9.1-static-jsx-compiler.mdx";
 
 /** 保留站点的部署前缀，方便首页和目录拼接课程链接。 */
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -76,6 +77,7 @@ const diamondUntrackUrl = `${baseUrl}/lessons/8.2-diamond-and-untrack/`;
 const reentrancyCyclesUrl = `${baseUrl}/lessons/8.3-reentrancy-and-cycles/`;
 const lazyMemoUrl = `${baseUrl}/lessons/8.4-lazy-memo/`;
 const jsxCompilerUrl = `${baseUrl}/lessons/9.0-jsx-compiler/`;
+const staticJsxCompilerUrl = `${baseUrl}/lessons/9.1-static-jsx-compiler/`;
 ---
 
 <BookLayout
@@ -170,4 +172,7 @@ const jsxCompilerUrl = `${baseUrl}/lessons/9.0-jsx-compiler/`;
   <h3 class="course-chapter">
     <a href={jsxCompilerUrl}>{jsxCompiler.title}</a>
   </h3>
+  <ul class="course-lessons">
+    <li><a href={staticJsxCompilerUrl}>{staticJsxCompiler.title}</a></li>
+  </ul>
 </BookLayout>
