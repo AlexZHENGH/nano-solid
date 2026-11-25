@@ -16,6 +16,7 @@ const ROOT_DIR = process.cwd();
 /** 浏览器运行时层文件集合：严禁反向依赖编译器或 Node 专属包。 */
 const BROWSER_RUNTIME_FILES = new Set([
   "src/reactive.ts",
+  "src/async-resource.ts",
   "src/dom.ts",
   "src/control-flow.ts",
   "src/jsx-runtime.ts",

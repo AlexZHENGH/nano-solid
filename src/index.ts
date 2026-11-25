@@ -1,4 +1,4 @@
-// 框架公共 API 入口：对外只暴露响应式原语、控制流组件、挂载入口与配套类型，隔离内部实现文件。
+// 框架公共 API 入口：应用可以直接使用响应式原语、异步资源、控制流组件与挂载入口。
 export {
   batch,
   createEffect,
@@ -14,3 +14,4 @@ export {
 export { render, type ElementProps, type TargetedEvent } from "./dom.ts";
 export { For, Show, type ForProps, type ShowProps } from "./control-flow.ts";
 export type { Component, JSXChild } from "./jsx-runtime.ts";
+export { createAsyncResource, type AsyncResource, type AsyncState } from "./async-resource.ts";

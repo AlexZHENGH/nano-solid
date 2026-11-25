@@ -1,0 +1,76 @@
+---
+layout: ../../layouts/BookLayout.astro
+title: "12.1 让异步资源只提交最新结果"
+description: "用一个 signal 表示异步状态，用 AbortController 取消请求并识别过期结果。"
+---
+
+import LessonSolution from "../../components/LessonSolution.astro";
+
+你刷新 Todo，服务器读到“订会议室”还没完成，但这份列表回得慢。等响应的时候，同事完成了任务。你又刷新一次，这回先看到了勾选后的列表。要是每次刷新一返回就写入页面，迟到的第一份列表会把你刚看到的勾去掉。
+
+`src/async-resource.test.ts` 用两个 Promise 重现这件事。先让第二次刷新返回勾选后的列表，确认“订会议室”已完成。再让第一次刷新返回未勾选的列表，检查任务仍然是已完成。为了让这条测试通过，收到结果后得先确认页面等的是哪一次请求。
+
+## 把等待、成功和失败放在一个 signal 里
+
+发送请求后先显示“读取中”。成功时显示任务，失败时显示错误。用 `loading`、`data`、`error` 三个独立的 signal 也能做，但每次重试都得记得清掉上次的错误，而且订阅者可能在几个字段之间读到中间状态。一份带 `status` 的快照读起来更直接，每次写入都带上该阶段需要的全部数据。
+
+```ts
+/** 请求状态与它携带的数据。缩小 status 后才能读取对应字段。 */
+type AsyncState<T> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; data: T }
+  | { status: "error"; error: unknown };
+```
+
+`createAsyncResource(loader)` 创建后停在 `idle`。`reload()` 由按钮或 Store 调用，它负责切到 `loading`，再等待 `loader(signal)`。`state()` 是普通的 signal getter，所以已经学过的 `createEffect` 和条件渲染都能接上。`loader` 只需要负责取数据，后面可以传 HTTP 请求，测试里也可以传自己控制的 Promise。
+
+测试里的第一个场景可以写成下面这样。它只在调用 `reload()` 时开始工作。
+
+```ts
+import { createAsyncResource, createEffect, createRoot } from "nano-solid";
+
+// 用手动完成的 Promise 代替真实网络，让三个状态都能单独观察。
+const pending = Promise.withResolvers<string[]>();
+const { resource, dispose } = createRoot((dispose) => {
+  const resource = createAsyncResource(() => pending.promise);
+  createEffect(() => console.log(resource.state().status));
+  return { resource, dispose };
+});
+
+// 先进入 loading，再放行本次响应。订阅者依次打印 idle、loading、success。
+const finished = resource.reload();
+pending.resolve(["确认发布清单"]);
+await finished;
+dispose();
+```
+
+## 取消旧请求后，仍要检查它能不能写入
+
+每次 `reload()` 都创建一个新的 `AbortController`，把它的 `signal` 传给 `loader`。如果用户再次加载，可以调用旧控制器的 `abort()`，让支持取消的加载器尽快停下。收到取消信号由加载器决定怎么处理。如果它忽略信号，Promise 仍然可能成功或失败。
+
+控制器对象本身就能标识一次请求。用一个变量保留当前请求的控制器，每个 `reload()` 也记住自己创建的那一个。`await` 返回后比较引用，只有两者还是同一个对象时才可以写状态。旧请求结束时也要做同样的比较，清掉别人的控制器会导致页面再也取消不了那个请求。
+
+`cancel()` 先让当前控制器失去资格，再把状态设回 `idle`，最后通知旧加载器停止。卸载时用 `onCleanup` 做同样的作废工作，保留最后一份状态，此后再调用 `reload()` 也不会发请求。这里 `abort()` 和写入 `loading` 都会同步运行别人的代码。比如订阅者看到 `loading` 后立刻调用 `cancel()`，回到 `reload()` 时就该跳过 `loader`。测试也会模拟这种情况。
+
+## `try` 应该包住哪一段
+
+只要加载器同步抛错或返回拒绝的 Promise，我们就把异常记成 `error` 状态。发布结果是下一步。如果因为 `setState({ status: "success", data })` 唤醒了一个有 bug 的组件，那是订阅者异常。把 `setState` 也放在捕获加载异常的 `try` 里，就会把一个本来成功的请求改成“读取失败”。先算出要发布的状态，再在 `catch` 外写入它。
+
+## 动手实现
+
+在 `src/async-resource.ts` 补齐加载、取消和 Owner 清理。`src/async-resource.test.ts` 里可以先看最短的场景，确认能观察到 `idle`、`loading` 和 `success`，再用两份手动结束的 Promise 检查乱序。把旧请求结束的时刻挪到新请求完成之前，你还可以检查它的收尾会不会动到新请求。
+
+> [!PRACTICE]
+>
+> ```sh
+> git switch -c solve/12.1 12.1-learn
+> ```
+>
+> 资源应依次报告等待和加载结果。取消、卸载或发出新请求后，旧请求即使返回也不能写入状态。异步资源的八条测试全部通过。
+>
+> ```sh
+> pnpm format && pnpm check && pnpm test:run
+> ```
+
+<LessonSolution slug="12.1-async-resource" tag="12.1-solution" />
