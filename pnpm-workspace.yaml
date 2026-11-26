@@ -2,7 +2,8 @@
 packages:
   - docs
 
-# 允许 Astro 依赖的构建和图片工具在安装时准备原生程序。
+# 允许 Astro 的构建和图片工具、Wrangler 的 Workers 运行时在安装时准备原生程序。
 allowBuilds:
   esbuild: true
   sharp: true
+  workerd: true

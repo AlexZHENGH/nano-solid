@@ -1,0 +1,10 @@
+{
+  "name": "nano-solid",
+  "compatibility_date": "2026-11-26",
+  // 自定义域名已在 Cloudflare 绑定，部署时由控制台管理。
+  "workers_dev": false,
+  "assets": {
+    // 只发布 Astro 文档的构建产物。
+    "directory": "./docs/dist",
+  },
+}

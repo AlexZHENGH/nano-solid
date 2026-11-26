@@ -1,0 +1,59 @@
+name: Deploy docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同一个生产站点同一时间只跑一条发布流程。
+concurrency:
+  group: nano-solid-docs-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # 手动运行时也只允许 main 发布生产站点。
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 标签检查需要完整历史，才能判断标签指向的提交是否可达。
+          fetch-depth: 0
+          persist-credentials: false
+
+      # pnpm 的版本从 package.json 的 packageManager 读取。
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.18.0"
+          cache: pnpm
+
+      - name: 安装锁定的依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 检查代码和课程标签
+        run: |
+          pnpm check
+          pnpm tags:check
+
+      # 支持库构建的快照先生成 dist。串行测试避免多个文件同时重建产物。
+      - name: 构建库并运行课程测试
+        run: |
+          pnpm run --if-present build:lib
+          # 部署配置在第一课之前就绪，当时还没有课程测试。
+          pnpm test:run --no-file-parallelism --passWithNoTests
+
+      - name: 构建 Astro 文档
+        run: pnpm docs:build
+
+      # 发布凭证只传给 Wrangler。
+      - name: 发布到 Cloudflare
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
